@@ -14,7 +14,7 @@ import time
 from typing import Dict, List, Any, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, Depends
+from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -26,6 +26,7 @@ import sys
 sys.path.append('/app')
 from src.common.messaging_simple import create_messaging_client, MessagingClient
 from src.common.config import Settings
+from src.common.file_handler import FileHandler, ProjectFiles, process_uploaded_zip, process_git_repo, process_file_dict
 
 # Logging setup
 logging.basicConfig(
@@ -64,6 +65,20 @@ class ProjectRequest(BaseModel):
     priority: str = Field(default="medium", pattern="^(low|medium|high|urgent)$")
     deadline: Optional[str] = None
     technology_preferences: List[str] = Field(default_factory=list, max_items=10)
+    
+    # Project source options
+    project_type: str = Field(default="new", pattern="^(new|existing_git|existing_local)$")
+    
+    # Git repository options
+    git_url: Optional[str] = None
+    git_branch: Optional[str] = "main"
+    git_credentials: Optional[Dict[str, str]] = None
+    
+    # Local project hints
+    main_language: Optional[str] = None
+    framework: Optional[str] = None
+    ignore_patterns: List[str] = Field(default_factory=list)
+    
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 class PipelineStatus(BaseModel):
@@ -117,7 +132,7 @@ class APIGateway:
             await self.messaging_client.stop()
         logger.info("API Gateway stopped")
         
-    async def submit_project_request(self, request: ProjectRequest) -> str:
+    async def submit_project_request(self, request: ProjectRequest, project_files: Optional[ProjectFiles] = None) -> str:
         """Submit a project request to the analysis pipeline"""
         request_id = f"req_{uuid.uuid4().hex[:8]}_{int(time.time())}"
         
@@ -127,6 +142,7 @@ class APIGateway:
             "project_description": request.description,
             "requirements": request.requirements,
             "constraints": request.constraints,
+            "project_type": request.project_type,
             "metadata": {
                 "project_name": request.project_name,
                 "priority": request.priority,
@@ -138,12 +154,34 @@ class APIGateway:
             }
         }
         
+        # Add project files if provided
+        if project_files:
+            analysis_request["project_files"] = {
+                "files": project_files.files,
+                "metadata": project_files.metadata,
+                "source_type": project_files.source_type,
+                "total_files": project_files.total_files,
+                "total_size": project_files.total_size,
+                "detected_language": project_files.detected_language,
+                "detected_framework": project_files.detected_framework,
+                "project_structure": project_files.project_structure
+            }
+        
+        # Add Git information if applicable
+        if request.project_type == "existing_git" and request.git_url:
+            analysis_request["git_info"] = {
+                "git_url": request.git_url,
+                "git_branch": request.git_branch,
+                "git_credentials": request.git_credentials
+            }
+        
         # Track the request
         self.active_requests[request_id] = {
             "status": "submitted",
             "created_at": time.time(),
             "updated_at": time.time(),
-            "original_request": request.dict()
+            "original_request": request.dict(),
+            "project_files": project_files.dict() if project_files else None
         }
         
         # Publish to analysis topic
@@ -153,8 +191,12 @@ class APIGateway:
         ACTIVE_PIPELINES.inc()
         PIPELINE_SUBMISSIONS.labels(status="success").inc()
         
-        logger.info(f"Submitted project request {request_id}: {request.project_name}")
+        logger.info(f"Submitted project request {request_id}: {request.project_name} (type: {request.project_type})")
         return request_id
+        
+    async def submit_project_with_files(self, request: ProjectRequest, uploaded_files: Optional[ProjectFiles]) -> str:
+        """Submit a project with uploaded files"""
+        return await self.submit_project_request(request, uploaded_files)
 
 # Global gateway instance
 api_gateway = APIGateway()
@@ -220,6 +262,81 @@ async def submit_project(request: ProjectRequest):
         REQUESTS_TOTAL.labels(endpoint="submit", method="POST", status="error").inc()
         PIPELINE_SUBMISSIONS.labels(status="error").inc()
         logger.error(f"Failed to submit project: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/submit_with_files", response_model=SubmissionResponse)
+async def submit_project_with_files(
+    project_data: str = Form(...),  # JSON string of ProjectRequest
+    project_files: Optional[UploadFile] = File(None)  # ZIP file
+):
+    """Submit a project with optional file upload"""
+    try:
+        # Parse project data
+        project_request_data = json.loads(project_data)
+        request = ProjectRequest(**project_request_data)
+        
+        # Handle file upload if provided
+        uploaded_files = None
+        if project_files and request.project_type == "existing_local":
+            if not project_files.filename.lower().endswith('.zip'):
+                raise HTTPException(status_code=400, detail="Only ZIP files are supported")
+            
+            if project_files.size and project_files.size > 50 * 1024 * 1024:  # 50MB limit
+                raise HTTPException(status_code=400, detail="File too large (max 50MB)")
+            
+            # Read file content
+            file_content = await project_files.read()
+            
+            # Process uploaded files using the file handler
+            hints = {
+                "ignore_patterns": request.ignore_patterns,
+                "main_language": request.main_language,
+                "framework": request.framework
+            }
+            uploaded_files = await process_uploaded_zip(file_content, project_files.filename, hints)
+            
+        elif request.project_type == "existing_git" and request.git_url:
+            # Process Git repository
+            hints = {
+                "ignore_patterns": request.ignore_patterns,
+                "main_language": request.main_language,
+                "framework": request.framework
+            }
+            uploaded_files = await process_git_repo(
+                git_url=request.git_url,
+                branch=request.git_branch or "main",
+                credentials=request.git_credentials,
+                hints=hints
+            )
+        
+        # Submit with uploaded files
+        with REQUEST_DURATION.time():
+            request_id = await api_gateway.submit_project_with_files(request, uploaded_files)
+        
+        REQUESTS_TOTAL.labels(endpoint="submit_with_files", method="POST", status="success").inc()
+        
+        file_info = ""
+        if uploaded_files:
+            file_info = f" with {uploaded_files.total_files} files ({uploaded_files.total_size} bytes)"
+            if uploaded_files.detected_language:
+                file_info += f", detected language: {uploaded_files.detected_language}"
+            if uploaded_files.detected_framework:
+                file_info += f", framework: {uploaded_files.detected_framework}"
+        
+        return SubmissionResponse(
+            request_id=request_id,
+            status="submitted",
+            message=f"Project '{request.project_name}'{file_info} submitted successfully",
+            dashboard_url=f"{ORCHESTRATOR_URL}/dashboard",
+            api_status_url=f"/status/{request_id}"
+        )
+        
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid project data JSON")
+    except Exception as e:
+        REQUESTS_TOTAL.labels(endpoint="submit_with_files", method="POST", status="error").inc()
+        PIPELINE_SUBMISSIONS.labels(status="error").inc()
+        logger.error(f"Failed to submit project with files: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/status/{request_id}", response_model=PipelineStatus)
@@ -392,7 +509,7 @@ async def dashboard():
             <h1>🚀 Multi-Agent Pipeline</h1>
             <p>Submit your software project requirements and let our AI agents handle the development!</p>
             
-            <form id="projectForm">
+            <form id="projectForm" enctype="multipart/form-data">
                 <div class="form-group">
                     <label for="projectName">Project Name:</label>
                     <input type="text" id="projectName" name="projectName" required>
@@ -402,6 +519,62 @@ async def dashboard():
                     <label for="description">Project Description:</label>
                     <textarea id="description" name="description" required 
                         placeholder="Describe your project requirements in detail..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="projectType">Project Type:</label>
+                    <select id="projectType" name="projectType" onchange="toggleProjectSource()">
+                        <option value="new" selected>New Project</option>
+                        <option value="existing_git">Existing Git Repository</option>
+                        <option value="existing_local">Local Project (Upload Files)</option>
+                    </select>
+                </div>
+                
+                <!-- Git URL section -->
+                <div id="gitSection" style="display: none;">
+                    <div class="form-group">
+                        <label for="gitUrl">Git Repository URL:</label>
+                        <input type="url" id="gitUrl" name="gitUrl" 
+                            placeholder="https://github.com/username/repository.git">
+                    </div>
+                    <div class="form-group">
+                        <label for="gitBranch">Branch:</label>
+                        <input type="text" id="gitBranch" name="gitBranch" value="main" 
+                            placeholder="main">
+                    </div>
+                </div>
+                
+                <!-- Local file upload section -->
+                <div id="localSection" style="display: none;">
+                    <div class="form-group">
+                        <label for="projectFiles">Project Files (ZIP):</label>
+                        <input type="file" id="projectFiles" name="projectFiles" accept=".zip">
+                        <small style="color: #666; font-size: 12px;">
+                            Upload a ZIP file containing your project. Max size: 50MB<br>
+                            Files matching common ignore patterns (.git, node_modules, etc.) will be skipped.
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="mainLanguage">Primary Language (optional):</label>
+                        <select id="mainLanguage" name="mainLanguage">
+                            <option value="">Auto-detect</option>
+                            <option value="python">Python</option>
+                            <option value="javascript">JavaScript/Node.js</option>
+                            <option value="typescript">TypeScript</option>
+                            <option value="java">Java</option>
+                            <option value="go">Go</option>
+                            <option value="rust">Rust</option>
+                            <option value="php">PHP</option>
+                            <option value="csharp">C#</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="framework">Framework (optional):</label>
+                        <input type="text" id="framework" name="framework" 
+                            placeholder="e.g., FastAPI, React, Spring Boot">
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -439,29 +612,69 @@ async def dashboard():
         </div>
         
         <script>
+            function toggleProjectSource() {
+                const projectType = document.getElementById('projectType').value;
+                const gitSection = document.getElementById('gitSection');
+                const localSection = document.getElementById('localSection');
+                
+                gitSection.style.display = projectType === 'existing_git' ? 'block' : 'none';
+                localSection.style.display = projectType === 'existing_local' ? 'block' : 'none';
+            }
+            
             document.getElementById('projectForm').addEventListener('submit', async function(e) {
                 e.preventDefault();
                 
                 const formData = new FormData(e.target);
+                const projectType = formData.get('projectType');
                 const requirements = formData.get('requirements').split('\\n').filter(r => r.trim());
                 const technologies = formData.get('technologies').split(',').map(t => t.trim()).filter(t => t);
                 
+                // Build project data
                 const projectData = {
                     project_name: formData.get('projectName'),
                     description: formData.get('description'),
                     requirements: requirements,
                     priority: formData.get('priority'),
-                    technology_preferences: technologies
+                    technology_preferences: technologies,
+                    project_type: projectType
                 };
                 
+                // Add type-specific fields
+                if (projectType === 'existing_git') {
+                    projectData.git_url = formData.get('gitUrl');
+                    projectData.git_branch = formData.get('gitBranch') || 'main';
+                } else if (projectType === 'existing_local') {
+                    projectData.main_language = formData.get('mainLanguage');
+                    projectData.framework = formData.get('framework');
+                }
+                
                 try {
-                    const response = await fetch('/submit', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(projectData)
-                    });
+                    let response;
+                    
+                    if (projectType === 'existing_local' || projectType === 'existing_git') {
+                        // Use multipart form for file uploads or git repos
+                        const submitData = new FormData();
+                        submitData.append('project_data', JSON.stringify(projectData));
+                        
+                        // Add files if uploading local project
+                        if (projectType === 'existing_local' && formData.get('projectFiles')) {
+                            submitData.append('project_files', formData.get('projectFiles'));
+                        }
+                        
+                        response = await fetch('/submit_with_files', {
+                            method: 'POST',
+                            body: submitData
+                        });
+                    } else {
+                        // Use JSON for new projects
+                        response = await fetch('/submit', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(projectData)
+                        });
+                    }
                     
                     const result = await response.json();
                     
@@ -470,10 +683,12 @@ async def dashboard():
                             '<div class="status success">' +
                             '<h4>✅ Project Submitted Successfully!</h4>' +
                             '<p>Request ID: ' + result.request_id + '</p>' +
+                            '<p>' + result.message + '</p>' +
                             '<p><a href="' + result.dashboard_url + '" target="_blank">View Dashboard</a></p>' +
                             '<p><a href="' + result.api_status_url + '" target="_blank">Check Status</a></p>' +
                             '</div>';
                         e.target.reset();
+                        toggleProjectSource(); // Reset form display
                         loadRequests();
                     } else {
                         throw new Error(result.detail || 'Submission failed');
