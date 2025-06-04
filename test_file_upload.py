@@ -16,10 +16,10 @@ from src.common.file_handler import FileHandler, process_uploaded_zip, process_g
 
 async def test_file_handler():
     """Test the file handler with various scenarios"""
-    print("🧪 Testing File Handler...")
+    print("Testing File Handler...")
     
     # Test 1: Create a simple ZIP file for testing
-    print("\n📁 Test 1: Creating test ZIP file...")
+    print("\nTest 1: Creating test ZIP file...")
     
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
@@ -59,10 +59,10 @@ if __name__ == "__main__":
         with open(zip_path, 'rb') as f:
             zip_content = f.read()
         
-        print(f"✅ Created test ZIP file: {len(zip_content)} bytes")
+        print(f"Created test ZIP file: {len(zip_content)} bytes")
         
         # Test 2: Process uploaded ZIP
-        print("\n📦 Test 2: Processing uploaded ZIP...")
+        print("\nTest 2: Processing uploaded ZIP...")
         try:
             project_files = await process_uploaded_zip(
                 zip_content, 
@@ -70,7 +70,7 @@ if __name__ == "__main__":
                 hints={"main_language": "python"}
             )
             
-            print(f"✅ Processed ZIP successfully!")
+            print(f"Processed ZIP successfully!")
             print(f"   - Files: {project_files.total_files}")
             print(f"   - Size: {project_files.total_size} bytes")
             print(f"   - Detected language: {project_files.detected_language}")
@@ -83,11 +83,11 @@ if __name__ == "__main__":
                 print(f"     * {file_path}")
                 
         except Exception as e:
-            print(f"❌ Error processing ZIP: {e}")
+            print(f"Error processing ZIP: {e}")
             return False
         
         # Test 3: Test Git repo (optional, requires network)
-        print("\n🌐 Test 3: Testing Git repository processing (optional)...")
+        print("\nTest 3: Testing Git repository processing (optional)...")
         try:
             # Test with a small public repo
             git_project_files = await process_git_repo(
@@ -96,45 +96,45 @@ if __name__ == "__main__":
                 hints={"main_language": "auto-detect"}
             )
             
-            print(f"✅ Processed Git repo successfully!")
+            print(f"Processed Git repo successfully!")
             print(f"   - Files: {git_project_files.total_files}")
             print(f"   - Size: {git_project_files.total_size} bytes")
             print(f"   - Detected language: {git_project_files.detected_language}")
             print(f"   - Source type: {git_project_files.source_type}")
             
         except Exception as e:
-            print(f"⚠️  Git test skipped (requires network): {e}")
+            print(f"Git test skipped (requires network): {e}")
         
-        print("\n✅ All file handler tests completed successfully!")
+        print("\nAll file handler tests completed successfully!")
         return True
 
 async def test_api_imports():
     """Test that all API components can be imported"""
-    print("\n🔧 Testing API imports...")
+    print("\nTesting API imports...")
     
     try:
         # Test API gateway imports
         sys.path.append('/home/flip/Desktop/test_swarm/services/api-gateway')
         import main as api_main
-        print("✅ API Gateway imports successfully")
+        print("API Gateway imports successfully")
         
         # Test file handler integration
         from src.common.file_handler import process_uploaded_zip, process_git_repo, process_file_dict
-        print("✅ File handler functions import successfully")
+        print("File handler functions import successfully")
         
         # Test messaging
         from src.common.messaging_simple import create_messaging_client
-        print("✅ Messaging system imports successfully")
+        print("Messaging system imports successfully")
         
         return True
         
     except Exception as e:
-        print(f"❌ Import error: {e}")
+        print(f"Import error: {e}")
         return False
 
 async def main():
     """Run all tests"""
-    print("🚀 Starting File Upload Integration Tests\n")
+    print("Starting File Upload Integration Tests\n")
     
     success = True
     
@@ -145,17 +145,17 @@ async def main():
     success &= await test_file_handler()
     
     if success:
-        print("\n🎉 All tests passed! File upload functionality is ready.")
-        print("\n📋 Summary of implemented features:")
-        print("   ✅ File handler with ZIP upload support")
-        print("   ✅ Git repository cloning and processing")
-        print("   ✅ Project structure analysis")
-        print("   ✅ Language and framework detection")
-        print("   ✅ API Gateway with file upload endpoint")
-        print("   ✅ Enhanced dashboard with file upload UI")
-        print("\n🚀 Ready to test with real uploads!")
+        print("\nAll tests passed! File upload functionality is ready.")
+        print("\nSummary of implemented features:")
+        print("   File handler with ZIP upload support")
+        print("   Git repository cloning and processing")
+        print("   Project structure analysis")
+        print("   Language and framework detection")
+        print("   API Gateway with file upload endpoint")
+        print("   Enhanced dashboard with file upload UI")
+        print("\nReady to test with real uploads!")
     else:
-        print("\n❌ Some tests failed. Check the errors above.")
+        print("\nSome tests failed. Check the errors above.")
         sys.exit(1)
 
 if __name__ == "__main__":

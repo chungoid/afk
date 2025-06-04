@@ -130,6 +130,9 @@ class BlueprintInput(BaseModel):
     database_schema: Dict[str, Any]
     api_specifications: Dict[str, Any]
     module_specifications: List[Dict[str, Any]]
+    project_type: str = "new"  # "new", "existing_git", "existing_local"
+    existing_codebase: Optional[Dict[str, Any]] = None
+    modification_plan: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any] = {}
 
 class CodeArtifact(BaseModel):

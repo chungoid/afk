@@ -36,6 +36,87 @@ services:
     volumes:
       - weaviate-data:/var/lib/weaviate
 
+  # MCP Servers for Agent Tool Access
+  mcp-fetch:
+    image: ghcr.io/chungoid/fetch:latest
+    container_name: mcp-fetch
+    ports:
+      - "8100:8080"
+    environment:
+      - MCP_SERVER_NAME=fetch
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+
+  mcp-filesystem:
+    image: ghcr.io/chungoid/filesystem:latest
+    container_name: mcp-filesystem
+    ports:
+      - "8101:8080"
+    environment:
+      - MCP_SERVER_NAME=filesystem
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./generated_project:/workspace
+      - /tmp/mcp-workspace:/mcp-workspace
+    restart: unless-stopped
+
+  mcp-git:
+    image: ghcr.io/chungoid/git:latest
+    container_name: mcp-git
+    ports:
+      - "8102:8080"
+    environment:
+      - MCP_SERVER_NAME=git
+      - LOG_LEVEL=INFO
+    volumes:
+      - git-repos:/repos
+      - ./generated_project:/workspace
+    restart: unless-stopped
+
+  mcp-memory:
+    image: ghcr.io/chungoid/memory:latest
+    container_name: mcp-memory
+    ports:
+      - "8103:8080"
+    environment:
+      - MCP_SERVER_NAME=memory
+      - LOG_LEVEL=INFO
+    volumes:
+      - mcp-memory-data:/data
+    restart: unless-stopped
+
+  mcp-sequentialthinking:
+    image: ghcr.io/chungoid/sequentialthinking:latest
+    container_name: mcp-sequentialthinking
+    ports:
+      - "8104:8080"
+    environment:
+      - MCP_SERVER_NAME=sequentialthinking
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+
+  mcp-time:
+    image: ghcr.io/chungoid/time:latest
+    container_name: mcp-time
+    ports:
+      - "8105:8080"
+    environment:
+      - MCP_SERVER_NAME=time
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+
+  mcp-context7:
+    image: ghcr.io/chungoid/context7:latest
+    container_name: mcp-context7
+    ports:
+      - "8106:8080"
+    environment:
+      - MCP_SERVER_NAME=context7
+      - LOG_LEVEL=INFO
+    volumes:
+      - mcp-context-data:/data
+    restart: unless-stopped
+
   analysis-agent:
     build:
       context: .
@@ -44,12 +125,21 @@ services:
     depends_on:
       - message-broker
       - weaviate
+      - mcp-filesystem
+      - mcp-git
+      - mcp-memory
+      - mcp-sequentialthinking
     environment:
       BROKER_URL: amqp://guest:guest@message-broker:5672/
       VECTORSTORE_URL: http://weaviate:8080
       LOG_LEVEL: INFO
       SUBSCRIBE_TOPIC: tasks.analysis
       PUBLISH_TOPIC: tasks.planning
+      # MCP Server URLs
+      MCP_FILESYSTEM_URL: http://mcp-filesystem:8080
+      MCP_GIT_URL: http://mcp-git:8080
+      MCP_MEMORY_URL: http://mcp-memory:8080
+      MCP_SEQUENTIALTHINKING_URL: http://mcp-sequentialthinking:8080
     ports:
       - "8001:8000"
 
@@ -91,12 +181,21 @@ services:
     depends_on:
       - message-broker
       - git-server
+      - mcp-filesystem
+      - mcp-git
+      - mcp-fetch
+      - mcp-memory
     environment:
       BROKER_URL: amqp://guest:guest@message-broker:5672/
       GIT_URL: http://git-server:3000
       LOG_LEVEL: INFO
       SUBSCRIBE_TOPIC: tasks.coding
       PUBLISH_TOPIC: tasks.testing
+      # MCP Server URLs
+      MCP_FILESYSTEM_URL: http://mcp-filesystem:8080
+      MCP_GIT_URL: http://mcp-git:8080
+      MCP_FETCH_URL: http://mcp-fetch:8080
+      MCP_MEMORY_URL: http://mcp-memory:8080
     ports:
       - "8005:8000"
 
@@ -180,3 +279,6 @@ volumes:
   rabbitmq-data:
   git-data:
   weaviate-data:
+  git-repos:
+  mcp-memory-data:
+  mcp-context-data:
