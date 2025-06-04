@@ -1,132 +1,379 @@
-# Analysis Agent
+# Multi-Agent Software Development Pipeline
 
-A hardened, production-ready pipeline for requirement analysis, task decomposition, validation, and publication.
+A production-ready, microservices-based multi-agent system that automates the complete software development lifecycle from requirements analysis to code generation and testing.
 
 ## Overview
 
-This repository provides a fully operationalized Analysis Agent that takes raw requirements, retrieves relevant context via RAG, generates intent and decomposed tasks through an LLM prompt chain, validates task schemas, and publishes them to a messaging layer.
+This system implements a sophisticated 6-stage AI-powered development pipeline that transforms project requirements into fully tested, deployable code. The pipeline consists of specialized agents that communicate via message queues to collaboratively analyze, plan, design, implement, and test software projects.
 
-## Features
+## Architecture
 
-• RAG context retrieval with vector store (Pinecone)  
-• Multi-step LLM prompting for intent extraction and task decomposition  
-• JSON Schema and Pydantic validation  
-• Robust publisher with retries and metrics hooks  
-• CLI entrypoint with `python -m orchestrator run_pipeline`  
-• Comprehensive unit and integration tests  
-• CI/CD pipeline with schema checks, linting, and coverage  
-• Modular, extensible architecture
+### Core Components
 
-## Getting Started
+The system is built as a distributed microservices architecture with the following components:
 
-### Prerequisites
+#### Agent Services
+- **API Gateway** (Port 8000): Entry point and web dashboard for project submissions
+- **Analysis Agent** (Port 8001): Requirements analysis and task decomposition  
+- **Orchestrator Agent** (Port 8002): Pipeline coordination and real-time monitoring
+- **Planning Agent** (Port 8003): Project planning and task sequencing
+- **Blueprint Agent** (Port 8004): Architecture design and technical specifications
+- **Code Agent** (Port 8005): Code generation and implementation
+- **Test Agent** (Port 8006): Automated testing and quality assurance
 
-• Python 3.9+  
-• API keys for OpenAI (or other LLM service)  
-• Pinecone API key and environment  
-• Messaging layer credentials (MCP)  
+#### Infrastructure Services
+- **RabbitMQ** (Port 5672/15672): Message broker for inter-agent communication
+- **Weaviate** (Port 8080): Vector database for semantic search and RAG
+- **Prometheus** (Port 9090): Metrics collection and monitoring
+- **Grafana** (Port 3001): Visualization and dashboards
+- **Jaeger** (Port 16686): Distributed tracing
+- **Git Server** (Port 3000): Version control and code storage
 
-### Installation
+### Pipeline Flow
 
-git clone <repo_url>  
-cd <repo_root>  
-python -m venv venv  
-source venv/bin/activate  
-pip install -r requirements.txt  
+1. **Analysis Stage**: Requirements are analyzed and decomposed into structured tasks
+2. **Planning Stage**: Tasks are prioritized, sequenced, and organized into a project plan
+3. **Blueprint Stage**: Technical architecture, database schemas, and API specifications are designed
+4. **Coding Stage**: Code is generated based on blueprints and requirements
+5. **Testing Stage**: Automated tests are created and executed with quality metrics
+6. **Orchestration**: Cross-stage coordination, monitoring, and pipeline management
 
-### Configuration
+## Prerequisites
 
-Create a `.env` file or export environment variables:
+### System Requirements
+- Docker 20.10+ and Docker Compose
+- 8GB+ RAM (recommended for all services)
+- 10GB+ available disk space
+- Linux, macOS, or Windows with WSL2
 
-OPENAI_API_KEY=your_openai_key  
-PINECONE_API_KEY=your_pinecone_key  
-PINECONE_ENVIRONMENT=your_pinecone_env  
-MCP_API_KEY=your_mcp_key  
-MCP_TOPIC=tasks.analysis
+### Required API Keys
+- OpenAI API key for LLM services
+- Optional: Other LLM provider API keys (Anthropic, etc.)
 
-## Project Structure
+## Installation
 
-Run `scripts/print_tree.sh` to generate `repo_structure.txt`. Excerpt:
+### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd test_swarm
+```
 
-.
-├── prompts
-│   ├── prompt_templates
-│   │   ├── intent_extraction.j2
-│   │   └── decomposition_step.j2
-│   └── chain.py
-├── schemas
-│   ├── task.schema.json
-│   └── prompt_chain.schema.json
-├── validators
-│   ├── __init__.py
-│   ├── validate.py
-│   └── models.py
-├── orchestrator
-│   ├── __main__.py
-│   ├── run_pipeline.py
-│   └── rag_retriever.py
-├── publishers
-│   └── mcp_publisher.py
-├── scripts
-│   └── print_tree.sh
-├── tests
-│   ├── validators_test.py
-│   ├── prompt_chain_test.py
-│   ├── rag_retriever_test.py
-│   └── orchestrator_flow_test.py
-├── docs
-│   ├── ARCHITECTURE.md
-│   ├── USAGE.md
-│   ├── TESTING.md
-│   └── Schemas.md
-├── .gitignore
-└── README.md
+### 2. Environment Configuration
+Create a `.env` file in the project root:
+
+```bash
+# LLM Configuration
+OPENAI_API_KEY=your_openai_api_key_here
+LLM_MODEL=gpt-3.5-turbo
+LLM_TEMPERATURE=0.1
+LLM_MAX_TOKENS=2000
+
+# Message Broker Configuration
+RABBITMQ_DEFAULT_USER=admin
+RABBITMQ_DEFAULT_PASS=secure_password
+BROKER_URL=amqp://admin:secure_password@mcp-use:5672/
+
+# Database Configuration
+WEAVIATE_URL=http://weaviate:8080
+VECTOR_STORE_CLASS=ProjectDocuments
+
+# Monitoring Configuration
+PROMETHEUS_URL=http://prometheus:9090
+JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+
+# Logging Configuration
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+
+# Service-specific Configuration
+ANALYSIS_SUBSCRIBE_TOPIC=tasks.analysis
+PLANNING_SUBSCRIBE_TOPIC=tasks.planning
+BLUEPRINT_SUBSCRIBE_TOPIC=tasks.blueprint
+CODING_SUBSCRIBE_TOPIC=tasks.coding
+TESTING_SUBSCRIBE_TOPIC=tasks.testing
+ORCHESTRATION_TOPIC=orchestration.events
+```
+
+### 3. Build and Start Services
+```bash
+# Build all services
+docker-compose build
+
+# Start the complete pipeline
+docker-compose up -d
+
+# Verify all services are healthy
+docker-compose ps
+```
+
+### 4. Initial Setup Verification
+```bash
+# Check service health
+curl http://localhost:8000/health
+
+# Verify message broker
+curl http://localhost:15672 (admin/secure_password)
+
+# Check monitoring
+curl http://localhost:9090/targets
+```
 
 ## Usage
 
-Run the pipeline:
+### Web Dashboard Interface
 
-python -m orchestrator run_pipeline --input requirements.txt
+Access the main project dashboard at `http://localhost:8000/dashboard` to:
+- Submit new projects via web form
+- Monitor project status and progress
+- View pipeline stages and completion
 
-Flags:
+### API Interface
 
---input  Path to a file with raw requirement text (defaults to stdin)  
---output File to write JSON tasks (defaults to stdout)  
---verbose Enable debug logging  
+#### Submit a Project
+```bash
+curl -X POST http://localhost:8000/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_name": "Todo Application",
+    "description": "A web-based todo application with user authentication and task management",
+    "requirements": [
+      "User registration and authentication",
+      "Create, read, update, delete tasks",
+      "Task categorization and filtering",
+      "REST API endpoints"
+    ],
+    "constraints": [
+      "Use Python FastAPI",
+      "PostgreSQL database",
+      "Deploy on Docker"
+    ],
+    "priority": "medium",
+    "technology_preferences": ["FastAPI", "PostgreSQL", "React"]
+  }'
+```
 
-### Example
+#### Check Project Status
+```bash
+curl http://localhost:8000/status/{request_id}
+```
 
-cat requirement.txt | python -m orchestrator run_pipeline > tasks.json
+#### List All Projects
+```bash
+curl http://localhost:8000/requests
+```
 
-## Testing
+### Individual Agent APIs
 
-Install dev dependencies:
+Each agent exposes standard endpoints:
+- `GET /health` - Health check
+- `GET /status` - Agent status and metrics
+- `GET /metrics` - Prometheus metrics
+- Agent-specific endpoints for direct interaction
 
-pip install -r requirements-dev.txt
+### Monitoring and Observability
 
-Run tests and schema validation:
+#### Real-time Dashboard
+- **Orchestrator Dashboard**: `http://localhost:8002/dashboard`
+  - Live pipeline monitoring with WebSocket updates
+  - Cross-agent coordination view
+  - Real-time progress tracking
 
-pytest --schema-validation --cov=.
+#### Metrics and Monitoring
+- **Prometheus**: `http://localhost:9090`
+  - Service metrics and performance data
+  - Custom alerts and monitoring rules
+- **Grafana**: `http://localhost:3001` (admin/admin)
+  - Pre-configured dashboards
+  - Service health visualization
+  - Performance analytics
 
-## CI/CD
+#### Distributed Tracing
+- **Jaeger**: `http://localhost:16686`
+  - Request tracing across services
+  - Performance bottleneck identification
+  - Service dependency mapping
 
-A GitHub Actions workflow runs on each PR:
+#### Message Queue Management
+- **RabbitMQ Management**: `http://localhost:15672` (admin/secure_password)
+  - Queue monitoring and management
+  - Message flow visualization
+  - Connection and channel monitoring
 
-1. Checkout & print tree  
-2. Install dependencies  
-3. Lint (black, isort, flake8)  
-4. Run pytest with schema plugin  
-5. Smoke-test orchestrator with fixtures  
-6. Upload coverage report
+## Development
+
+### Local Development Setup
+
+1. **Install Python Dependencies**
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+2. **Install Node.js Dependencies**
+```bash
+npm install
+```
+
+3. **Development with Hot Reload**
+```bash
+# Start infrastructure services only
+docker-compose up -d mcp-use weaviate prometheus grafana jaeger git-server
+
+# Run agents locally with hot reload
+python services/analysis-agent/main.py
+python services/planning-agent/main.py
+# ... etc
+```
+
+### Adding New Agents
+
+1. Create service directory: `services/new-agent/`
+2. Implement FastAPI service with standard endpoints
+3. Add Dockerfile and requirements.txt
+4. Update docker-compose.yml
+5. Configure message topics and routing
+
+### Testing
+
+```bash
+# Unit tests
+pytest tests/unit/
+
+# Integration tests
+pytest tests/integration/
+
+# End-to-end pipeline tests
+pytest tests/e2e/
+
+# Performance tests
+pytest tests/performance/
+```
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENAI_API_KEY` | OpenAI API key for LLM services | Required |
+| `LOG_LEVEL` | Logging level (DEBUG/INFO/WARNING/ERROR) | INFO |
+| `BROKER_URL` | RabbitMQ connection URL | amqp://guest:guest@localhost:5672/ |
+| `WEAVIATE_URL` | Weaviate vector database URL | http://localhost:8080 |
+| `PROMETHEUS_URL` | Prometheus metrics endpoint | http://localhost:9090 |
+
+### Service Configuration
+
+Each agent can be configured via environment variables or configuration files:
+- Message topics and routing
+- LLM model selection and parameters
+- Database connections
+- Monitoring and logging settings
+
+## Troubleshooting
+
+### Common Issues
+
+#### Services Not Starting
+```bash
+# Check container logs
+docker-compose logs <service-name>
+
+# Restart specific service
+docker-compose restart <service-name>
+
+# Rebuild if needed
+docker-compose build <service-name>
+```
+
+#### API Connection Issues
+```bash
+# Verify service health
+curl http://localhost:8000/health
+
+# Check service status
+docker-compose ps
+
+# Verify network connectivity
+docker-compose exec api-gateway ping analysis-agent
+```
+
+#### Message Queue Issues
+```bash
+# Check RabbitMQ status
+curl http://localhost:15672/api/overview
+
+# Monitor message queues
+docker-compose exec mcp-use rabbitmqctl list_queues
+```
+
+#### Performance Issues
+```bash
+# Check resource usage
+docker stats
+
+# Monitor service metrics
+curl http://localhost:9090/api/v1/query?query=up
+
+# View detailed traces
+# Navigate to http://localhost:16686
+```
+
+### Debug Mode
+Enable debug logging by setting:
+```bash
+export LOG_LEVEL=DEBUG
+docker-compose restart
+```
+
+## Production Deployment
+
+### Security Considerations
+- Change default passwords in `.env`
+- Use secure API keys and credentials
+- Configure TLS/SSL certificates
+- Implement proper authentication and authorization
+- Network security and firewall configuration
+
+### Scaling
+- Configure service replicas in docker-compose.yml
+- Use container orchestration (Kubernetes, Docker Swarm)
+- Implement load balancing for high availability
+- Monitor and scale based on metrics
+
+### Backup and Recovery
+- Regular backup of vector database and project data
+- Database backup strategies
+- Configuration backup and version control
+- Disaster recovery procedures
 
 ## Contributing
 
-1. Fork the repo  
-2. Create a feature branch  
-3. Write code and tests  
-4. Ensure `scripts/print_tree.sh` output is up to date  
-5. Submit a PR and pass CI checks
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Development Guidelines
+- Follow Python PEP 8 style guidelines
+- Write comprehensive tests for new features
+- Update documentation for API changes
+- Ensure all services maintain health check endpoints
+- Follow semantic versioning for releases
 
 ## License
 
-MIT License. See LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+For support and questions:
+- Check the [troubleshooting section](#troubleshooting)
+- Review service logs: `docker-compose logs <service-name>`
+- Monitor service health: `http://localhost:8000/health`
+- Create an issue in the repository
+
+## Acknowledgments
+
+Built with modern microservices architecture patterns and industry-standard observability tools.
