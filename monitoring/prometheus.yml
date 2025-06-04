@@ -1,0 +1,67 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "prometheus_rules.yaml"
+
+scrape_configs:
+  # Analysis Agent
+  - job_name: 'analysis-agent'
+    static_configs:
+      - targets: ['analysis-agent:8000']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  # Planning Agent  
+  - job_name: 'planning-agent'
+    static_configs:
+      - targets: ['planning-agent:8000']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  # Blueprint Agent
+  - job_name: 'blueprint-agent'
+    static_configs:
+      - targets: ['blueprint-agent:8000']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  # Code Agent
+  - job_name: 'code-agent'
+    static_configs:
+      - targets: ['code-agent:8000']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  # Test Agent
+  - job_name: 'test-agent'
+    static_configs:
+      - targets: ['test-agent:8000']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  # Orchestrator Agent
+  - job_name: 'orchestrator-agent'
+    static_configs:
+      - targets: ['orchestrator-agent:8000']
+    scrape_interval: 5s
+    metrics_path: '/metrics'
+
+  # Infrastructure monitoring
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['message-broker:15692']
+    scrape_interval: 30s
+
+  - job_name: 'weaviate'
+    static_configs:
+      - targets: ['weaviate:8080']
+    scrape_interval: 30s
+    metrics_path: '/v1/metrics'
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093 
