@@ -97,13 +97,25 @@ class SimpleMessagingClient(MessagingClient):
 def create_messaging_client(loop: Optional[asyncio.AbstractEventLoop] = None) -> MessagingClient:
     """
     Factory to create the appropriate messaging client.
-    For now, using simple in-memory client due to dependency issues.
+    Prefers actual messaging backends when available, falls back to simple client.
     """
     if loop is None:
         loop = asyncio.get_event_loop()
-        
-    # Use simple client for now
-    return SimpleMessagingClient()
+    
+    # Check if we should use simple messaging (for testing/development)
+    use_simple = os.getenv("USE_SIMPLE_MESSAGING", "false").lower() == "true"
+    if use_simple:
+        logger.info("Using simple in-memory messaging client")
+        return SimpleMessagingClient()
+    
+    # Try to use the comprehensive messaging system
+    try:
+        from .messaging import create_messaging_client as create_real_client
+        logger.info("Using comprehensive messaging client")
+        return create_real_client(loop)
+    except Exception as e:
+        logger.warning(f"Could not create comprehensive messaging client, falling back to simple: {e}")
+        return SimpleMessagingClient()
 
 def setup_signal_handlers(loop: asyncio.AbstractEventLoop, client: MessagingClient):
     """

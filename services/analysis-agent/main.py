@@ -140,6 +140,8 @@ class AnalysisAgent:
             request_id = request.request_id
             
             logger.info(f"Processing analysis request {request_id}")
+            logger.info(f"PUBLISH_TOPIC is set to: {PUBLISH_TOPIC}")
+            logger.info(f"Messaging client type: {type(self.messaging_client)}")
             ACTIVE_ANALYSES.inc()
             
             # Track active analysis
@@ -148,8 +150,26 @@ class AnalysisAgent:
             # Perform the analysis using existing functionality
             analysis_result = await self.analyze_project(request)
             
+            # Quick test: try to publish a simple test message first
+            try:
+                test_message = {"test": "message", "request_id": request_id}
+                await self.messaging_client.publish("test.topic", test_message)
+                logger.info("Test message published successfully")
+            except Exception as test_error:
+                logger.error(f"Test message failed: {test_error}", exc_info=True)
+            
             # Publish result to planning topic
-            await self.messaging_client.publish(PUBLISH_TOPIC, analysis_result.dict())
+            try:
+                logger.info(f"About to serialize analysis result for publishing...")
+                result_dict = analysis_result.dict()
+                logger.info(f"Successfully serialized. Publishing to {PUBLISH_TOPIC} with keys: {list(result_dict.keys())}")
+                logger.info(f"Tasks field contains {len(result_dict.get('tasks', []))} tasks")
+                
+                await self.messaging_client.publish(PUBLISH_TOPIC, result_dict)
+                logger.info(f"Successfully published message to {PUBLISH_TOPIC}")
+            except Exception as publish_error:
+                logger.error(f"Failed to publish analysis result: {publish_error}", exc_info=True)
+                raise
             
             # Update metrics
             ANALYSIS_REQUESTS_TOTAL.labels(status="success").inc()

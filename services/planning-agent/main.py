@@ -116,18 +116,32 @@ ACTIVE_PLANS = DummyMetric()
 PLANNING_ERRORS = DummyMetric()
 
 # Configuration
-SUBSCRIBE_TOPIC = os.getenv("SUBSCRIBE_TOPIC", "tasks.analysis")
-PUBLISH_TOPIC = os.getenv("PUBLISH_TOPIC", "tasks.planning")
+SUBSCRIBE_TOPIC = os.getenv("SUBSCRIBE_TOPIC", "tasks.planning")
+PUBLISH_TOPIC = os.getenv("PUBLISH_TOPIC", "tasks.blueprint")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # Pydantic models
 class TaskInput(BaseModel):
     """Task from analysis agent"""
-    id: str
-    title: str
+    task_id: str
+    name: str
     description: str
+    type: str = "development"
+    priority: int = 5
+    estimated_hours: float = 8.0
     dependencies: List[str] = []
-    metadata: Dict[str, Any] = {}
+    skills_required: List[str] = []
+    complexity: str = "medium"
+    
+    @property
+    def id(self) -> str:
+        """Alias for backward compatibility"""
+        return self.task_id
+        
+    @property 
+    def title(self) -> str:
+        """Alias for backward compatibility"""
+        return self.name
 
 class PlanningOutput(BaseModel):
     """Planning result to publish"""
@@ -151,6 +165,9 @@ class PlanningAgent:
     async def start(self):
         """Initialize the messaging client and start listening"""
         logger.info("Starting Planning Agent...")
+        logger.info(f"SUBSCRIBE_TOPIC environment variable: {os.getenv('SUBSCRIBE_TOPIC', 'NOT_SET')}")
+        logger.info(f"SUBSCRIBE_TOPIC value: {SUBSCRIBE_TOPIC}")
+        logger.info(f"PUBLISH_TOPIC value: {PUBLISH_TOPIC}")
         
         # Initialize messaging client 
         self.messaging_client = create_messaging_client()
@@ -182,10 +199,12 @@ class PlanningAgent:
             MESSAGES_RECEIVED.inc()
             ACTIVE_PLANS.inc()
             
-            logger.info(f"Received analysis message: {message}")
+            logger.info(f"Received analysis message with keys: {list(message.keys())}")
+            logger.info(f"Full message: {message}")
             
             # Parse the tasks from analysis
             if "tasks" not in message:
+                logger.error(f"Message missing 'tasks' field. Available fields: {list(message.keys())}")
                 raise ValueError("Message missing 'tasks' field")
                 
             tasks_data = message["tasks"]
@@ -257,8 +276,8 @@ class PlanningAgent:
             # Convert to dict and add priority scoring
             task_dict = task.dict()
             
-            # Simple priority algorithm
-            priority_score = 5  # Default medium priority
+            # Use existing priority or calculate new one
+            priority_score = task.priority if hasattr(task, 'priority') else 5
             
             # Higher priority for tasks with no dependencies
             if not task.dependencies:
@@ -309,7 +328,7 @@ class PlanningAgent:
         """Create execution sequence respecting dependencies"""
         sequence = []
         completed = set()
-        remaining = {task["id"]: task for task in tasks}
+        remaining = {task["task_id"]: task for task in tasks}
         
         while remaining:
             # Find tasks with no unmet dependencies

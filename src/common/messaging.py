@@ -6,7 +6,28 @@ import signal
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, Coroutine, Optional, List
 
-from aiokafka import AIOKafkaProducer, AIOKafkaConsumer, ConsumerRecord
+try:
+    from aiokafka import AIOKafkaProducer, AIOKafkaConsumer, ConsumerRecord
+    KAFKA_AVAILABLE = True
+except ImportError:
+    KAFKA_AVAILABLE = False
+    AIOKafkaProducer = None
+    AIOKafkaConsumer = None
+    ConsumerRecord = None
+
+try:
+    import aio_pika
+    RABBITMQ_AVAILABLE = True
+except ImportError:
+    RABBITMQ_AVAILABLE = False
+    aio_pika = None
+
+try:
+    import aioredis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+    aioredis = None
 
 logger = logging.getLogger("messaging")
 logger.setLevel(logging.INFO)
@@ -73,6 +94,8 @@ class KafkaMessagingClient(MessagingClient):
         self._stopped = asyncio.Event()
 
     async def start(self):
+        if not KAFKA_AVAILABLE:
+            raise RuntimeError("aiokafka not available")
         self.producer = AIOKafkaProducer(
             loop=self.loop,
             bootstrap_servers=self.brokers,
@@ -169,6 +192,8 @@ class RedisStreamMessagingClient(MessagingClient):
         self._stopped = asyncio.Event()
 
     async def start(self):
+        if not REDIS_AVAILABLE:
+            raise RuntimeError("aioredis not available")
         self.redis = await aioredis.from_url(self.url, decode_responses=True)
         logger.info("Redis client connected at %s", self.url)
 
@@ -229,22 +254,140 @@ class RedisStreamMessagingClient(MessagingClient):
         task = self.loop.create_task(_consumer_task())
         self.tasks.append(task)
 
+class RabbitMQMessagingClient(MessagingClient):
+    """
+    RabbitMQ-based messaging using aio_pika.
+    """
+
+    def __init__(self, url: str, loop: asyncio.AbstractEventLoop):
+        self.url = url
+        self.loop = loop
+        self.connection: Optional[aio_pika.Connection] = None
+        self.channel: Optional[aio_pika.Channel] = None
+        self.exchanges: Dict[str, aio_pika.Exchange] = {}
+        self.queues: Dict[str, aio_pika.Queue] = {}
+        self.tasks: List[asyncio.Task] = []
+        self._stopped = asyncio.Event()
+
+    async def start(self):
+        if not RABBITMQ_AVAILABLE:
+            raise RuntimeError("aio_pika not available")
+        
+        self.connection = await aio_pika.connect_robust(self.url, loop=self.loop)
+        self.channel = await self.connection.channel()
+        await self.channel.set_qos(prefetch_count=10)
+        logger.info("RabbitMQ client connected at %s", self.url)
+
+    async def stop(self):
+        self._stopped.set()
+        for task in self.tasks:
+            task.cancel()
+        
+        if self.channel:
+            await self.channel.close()
+        if self.connection:
+            await self.connection.close()
+        logger.info("RabbitMQ messaging stopped")
+
+    async def publish(self, topic: str, message: Dict[str, Any]):
+        if not self.channel:
+            raise RuntimeError("RabbitMQ channel not started")
+        
+        # Get or create exchange for topic
+        if topic not in self.exchanges:
+            self.exchanges[topic] = await self.channel.declare_exchange(
+                topic, aio_pika.ExchangeType.TOPIC, durable=True
+            )
+        
+        exchange = self.exchanges[topic]
+        
+        attempt = 0
+        while True:
+            try:
+                message_body = json.dumps(message).encode('utf-8')
+                await exchange.publish(
+                    aio_pika.Message(message_body),
+                    routing_key=topic
+                )
+                logger.debug("Published to %s: %s", topic, message)
+                return
+            except Exception as e:
+                delay = exponential_backoff(attempt)
+                logger.warning("Publish failed, attempt %d, retrying in %.2f: %s", attempt, delay, e)
+                await asyncio.sleep(delay)
+                attempt += 1
+
+    def subscribe(self,
+                  topic: str,
+                  callback: Callable[[Dict[str, Any]], Coroutine[Any, Any, None]],
+                  group_id: Optional[str] = None):
+        
+        queue_name = f"{group_id or 'default'}.{topic}"
+        
+        async def _consumer_task():
+            if not self.channel:
+                return
+                
+            # Declare exchange
+            exchange = await self.channel.declare_exchange(
+                topic, aio_pika.ExchangeType.TOPIC, durable=True
+            )
+            
+            # Declare queue
+            queue = await self.channel.declare_queue(queue_name, durable=True)
+            await queue.bind(exchange, routing_key=topic)
+            
+            logger.info("RabbitMQ consumer started for topic=%s, queue=%s", topic, queue_name)
+            
+            async with queue.iterator() as queue_iter:
+                async for message in queue_iter:
+                    if self._stopped.is_set():
+                        break
+                    
+                    try:
+                        payload = json.loads(message.body.decode('utf-8'))
+                        logger.debug("Received message on %s: %s", topic, payload)
+                        await callback(payload)
+                        await message.ack()
+                    except Exception as e:
+                        logger.exception("Error handling message: %s", e)
+                        await message.nack(requeue=False)
+            
+            logger.info("RabbitMQ consumer stopped for topic=%s", topic)
+
+        task = self.loop.create_task(_consumer_task())
+        self.tasks.append(task)
+
 def create_messaging_client(loop: Optional[asyncio.AbstractEventLoop] = None) -> MessagingClient:
     """
     Factory to create the appropriate messaging client based on environment variables.
     """
     if loop is None:
         loop = asyncio.get_event_loop()
+    
+    # Check for BROKER_URL first (used by RabbitMQ)
+    broker_url = os.getenv("BROKER_URL")
+    if broker_url and broker_url.startswith("amqp://"):
+        return RabbitMQMessagingClient(url=broker_url, loop=loop)
+    
+    # Fall back to BROKER_TYPE for other systems
     broker_type = os.getenv("BROKER_TYPE", "kafka").lower()
     if broker_type == "kafka":
+        if not KAFKA_AVAILABLE:
+            raise RuntimeError("aiokafka not available")
         brokers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092").split(",")
         client_id = os.getenv("KAFKA_CLIENT_ID", "multi-agent-client")
         return KafkaMessagingClient(brokers=brokers, loop=loop, client_id=client_id)
     elif broker_type == "redis":
+        if not REDIS_AVAILABLE:
+            raise RuntimeError("aioredis not available")
         url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         group = os.getenv("REDIS_CONSUMER_GROUP", "multi-agent-group")
         consumer_name = os.getenv("REDIS_CONSUMER_NAME", "consumer-1")
         return RedisStreamMessagingClient(url=url, group=group, consumer_name=consumer_name, loop=loop)
+    elif broker_type == "rabbitmq":
+        rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
+        return RabbitMQMessagingClient(url=rabbitmq_url, loop=loop)
     else:
         raise ValueError(f"Unsupported BROKER_TYPE: {broker_type}")
 
