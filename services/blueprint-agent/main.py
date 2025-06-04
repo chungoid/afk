@@ -138,9 +138,6 @@ class ArchitecturalBlueprint(BaseModel):
     technology_stack: Dict[str, Any]
     database_schema: Dict[str, Any]
     api_specifications: Dict[str, Any]
-    deployment_architecture: Dict[str, Any]
-    security_considerations: List[str]
-    diagrams: Dict[str, str]  # diagram_type -> mermaid_code
     module_specifications: List[Dict[str, Any]]
     metadata: Dict[str, Any]
 
@@ -231,15 +228,6 @@ class BlueprintAgent:
         # Create API specifications
         api_specifications = self.design_api_specifications(system_requirements)
         
-        # Plan deployment architecture
-        deployment_architecture = self.design_deployment_architecture(system_requirements)
-        
-        # Identify security considerations
-        security_considerations = self.identify_security_considerations(system_requirements)
-        
-        # Generate diagrams
-        diagrams = self.generate_diagrams(system_architecture, database_schema)
-        
         # Create module specifications
         module_specifications = self.create_module_specifications(system_requirements, plan.execution_sequence)
         
@@ -250,9 +238,6 @@ class BlueprintAgent:
             technology_stack=technology_stack,
             database_schema=database_schema,
             api_specifications=api_specifications,
-            deployment_architecture=deployment_architecture,
-            security_considerations=security_considerations,
-            diagrams=diagrams,
             module_specifications=module_specifications,
             metadata={
                 **plan.metadata,

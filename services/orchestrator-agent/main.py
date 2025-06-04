@@ -6,65 +6,10 @@ Publishes to: orchestration.events
 """
 
 import asyncio
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import os
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import json
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import logging
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import time
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 from typing import Dict, List, Any, Optional, Set
 from contextlib import asynccontextmanager
 from collections import defaultdict
@@ -75,31 +20,47 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 import uvicorn
 
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
+# Comprehensive DummyMetric class to replace Prometheus metrics
+class DummyMetricValue:
+    def __init__(self):
+        self.value = 0
+    
+    def sum(self):
+        return self.value
+    
+    def get(self):
+        return self.value
 
-# Removed prometheus imports for now
+class DummyMetric:
+    def __init__(self):
+        self._value = DummyMetricValue()
+        
+    def inc(self): 
+        self._value.value += 1
+        
+    def dec(self): 
+        self._value.value -= 1
+        
+    def observe(self, value): 
+        self._value.value = value
+        
+    def set(self, value):
+        self._value.value = value
+        
+    def labels(self, **kwargs): 
+        return self
+        
+    def time(self): 
+        return self
+        
+    def __enter__(self): 
+        return self
+        
+    def __exit__(self, *args): 
+        pass
 
 # Import the existing messaging infrastructure
 import sys
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 sys.path.append('/app')
 from src.common.messaging_simple import create_messaging_client, MessagingClient
 from src.common.config import Settings
@@ -183,13 +144,14 @@ class OrchestratorAgent:
         self.websocket_connections: Set[WebSocket] = set()
         
         # Stage order for pipeline tracking
-        self.stage_order = ["analysis", "planning", "blueprint", "coding", "testing"]
+        self.stage_order = ["analysis", "planning", "blueprint", "coding", "testing", "deployment"]
         self.stage_topics = {
             "analysis": "tasks.analysis",
             "planning": "tasks.planning", 
             "blueprint": "tasks.blueprint",
             "coding": "tasks.coding",
-            "testing": "tasks.testing"
+            "testing": "tasks.testing",
+            "deployment": "tasks.deployment"
         }
         
     async def start(self):
@@ -280,17 +242,21 @@ class OrchestratorAgent:
             
     def determine_stage_from_message(self, message: Dict[str, Any]) -> str:
         """Determine pipeline stage from message content"""
+        # Check for TestOutput (deployment) messages first
+        if any(field in message for field in ["test_results", "coverage_report", "quality_metrics", "overall_status"]):
+            return "deployment"
+            
         # Check message metadata first
         if "agent" in message.get("metadata", {}):
             agent = message["metadata"]["agent"]
-            if "planning" in agent:
+            if "test-agent" in agent:
+                return "deployment"
+            elif "planning" in agent:
                 return "planning"
             elif "blueprint" in agent:
                 return "blueprint"
             elif "code" in agent:
                 return "coding"
-            elif "test" in agent:
-                return "testing"
             elif "analysis" in agent:
                 return "analysis"
                 
