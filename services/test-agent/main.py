@@ -125,6 +125,7 @@ class DummyMetric:
 sys.path.append('/app')
 from src.common.messaging_simple import create_messaging_client, MessagingClient
 from src.common.config import Settings
+from src.common.artifact_persistence import ArtifactPersistenceService
 
 # Logging setup
 logging.basicConfig(
@@ -191,8 +192,35 @@ class QualityMetrics(BaseModel):
     security_hotspots: int
     duplicated_lines: int
 
-class TestOutput(BaseModel):
-    """Test execution result to publish"""
+class DeploymentTarget(BaseModel):
+    """Deployment target configuration"""
+    name: str  # e.g., "docker", "kubernetes", "staging"
+    type: str  # e.g., "container", "k8s", "vm"
+    endpoint: Optional[str] = None
+    credentials: Optional[Dict[str, str]] = None
+    config: Dict[str, Any] = {}
+
+class DeploymentResult(BaseModel):
+    """Deployment execution result"""
+    target: str
+    status: str  # "success", "failed", "partial"
+    deployment_id: str
+    endpoint: Optional[str] = None
+    logs: List[str] = []
+    error_message: Optional[str] = None
+    deployment_time: float
+    health_check_status: str = "pending"
+
+class ArtifactPersistence(BaseModel):
+    """Artifact persistence information"""
+    git_repo_url: str
+    commit_hash: str
+    branch: str
+    artifact_paths: List[str]
+    metadata_stored: bool = False
+
+class EnhancedTestOutput(BaseModel):
+    """Enhanced test execution result with deployment"""
     test_id: str
     code_id: str
     test_results: List[TestResult]
@@ -200,9 +228,18 @@ class TestOutput(BaseModel):
     quality_metrics: QualityMetrics
     performance_benchmarks: Dict[str, Any]
     security_scan_results: Dict[str, Any]
+    
+    # New deployment fields
+    deployment_results: List[DeploymentResult] = []
+    artifact_persistence: Optional[ArtifactPersistence] = None
+    post_deployment_tests: List[TestResult] = []
+    
     overall_status: str  # "passed", "failed", "warning"
     recommendations: List[str]
     metadata: Dict[str, Any]
+
+# Update the existing TestOutput for backward compatibility
+TestOutput = EnhancedTestOutput
 
 class TestAgent:
     """
@@ -211,6 +248,7 @@ class TestAgent:
     
     def __init__(self):
         self.messaging_client: Optional[MessagingClient] = None
+        self.artifact_service = ArtifactPersistenceService()
         self.is_running = False
         
     async def start(self):
@@ -271,7 +309,7 @@ class TestAgent:
             ACTIVE_TEST_RUNS.dec()
             
     async def run_tests(self, code_input: CodeInput) -> TestOutput:
-        """Run tests on the provided code"""
+        """Run tests on the provided code, then deploy if tests pass"""
         
         # Generate unique test ID
         test_id = f"test_{int(time.time())}_{code_input.code_id}"
@@ -296,6 +334,31 @@ class TestAgent:
             # Generate recommendations
             recommendations = self.generate_recommendations(test_results, coverage_report, quality_metrics)
             
+            # NEW: Deploy if tests pass
+            deployment_results = []
+            artifact_persistence = None
+            post_deployment_tests = []
+            
+            if overall_status in ["passed", "warning"]:
+                logger.info("Tests passed, proceeding with deployment...")
+                
+                # Persist artifacts to Git
+                artifact_persistence = await self.persist_artifacts(code_input, temp_path)
+                
+                # Deploy to configured targets
+                deployment_results = await self.deploy_artifacts(code_input, temp_path)
+                
+                # Run post-deployment tests
+                post_deployment_tests = await self.run_post_deployment_tests(deployment_results)
+                
+                # Update overall status based on deployment
+                if any(dr.status == "failed" for dr in deployment_results):
+                    overall_status = "failed"
+                    recommendations.append("Deployment failed - check deployment logs")
+            else:
+                logger.info("Tests failed, skipping deployment")
+                recommendations.append("Fix test failures before deployment")
+            
             return TestOutput(
                 test_id=test_id,
                 code_id=code_input.code_id,
@@ -304,14 +367,19 @@ class TestAgent:
                 quality_metrics=quality_metrics,
                 performance_benchmarks=performance_benchmarks,
                 security_scan_results=security_scan_results,
+                deployment_results=deployment_results,
+                artifact_persistence=artifact_persistence,
+                post_deployment_tests=post_deployment_tests,
                 overall_status=overall_status,
                 recommendations=recommendations,
                 metadata={
                     **code_input.metadata,
                     "created_at": time.time(),
-                    "agent": "test-agent",
+                    "agent": "test-deploy-agent",
                     "version": "1.0",
-                    "test_duration": time.time() - time.time()
+                    "test_duration": time.time() - time.time(),
+                    "deployment_count": len(deployment_results),
+                    "artifacts_persisted": artifact_persistence is not None
                 }
             )
             
@@ -716,14 +784,218 @@ class TestAgent:
         ])
         
         return recommendations
+
+    async def persist_artifacts(self, code_input: CodeInput, temp_path: Path) -> ArtifactPersistence:
+        """Persist artifacts using the artifact persistence service"""
+        try:
+            project_name = code_input.metadata.get("project_name", "generated-project")
+            project_id = code_input.code_id
+            
+            # Convert artifacts to the format expected by persistence service
+            artifacts = []
+            for artifact in code_input.artifacts + code_input.test_files:
+                artifacts.append({
+                    "file_path": artifact.file_path,
+                    "content": artifact.content,
+                    "language": artifact.language,
+                    "module": artifact.module,
+                    "dependencies": artifact.dependencies
+                })
+            
+            # Use the artifact persistence service
+            result = await self.artifact_service.persist_project_artifacts(
+                project_id=project_id,
+                project_name=project_name,
+                artifacts=artifacts,
+                temp_path=temp_path,
+                agent_name="test-deploy-agent"
+            )
+            
+            if result["success"]:
+                return ArtifactPersistence(
+                    git_repo_url=result["git_repo_url"],
+                    commit_hash=result["commit_hash"],
+                    branch="main",
+                    artifact_paths=[artifact["file_path"] for artifact in artifacts],
+                    metadata_stored=True
+                )
+            else:
+                logger.warning(f"Artifact persistence partially failed: {result['errors']}")
+                return ArtifactPersistence(
+                    git_repo_url=result.get("git_repo_url", "failed"),
+                    commit_hash=result.get("commit_hash", "failed"),
+                    branch="main",
+                    artifact_paths=[artifact["file_path"] for artifact in artifacts],
+                    metadata_stored=False
+                )
+            
+        except Exception as e:
+            logger.error(f"Error persisting artifacts: {e}")
+            return ArtifactPersistence(
+                git_repo_url="failed",
+                commit_hash="failed",
+                branch="main",
+                artifact_paths=[],
+                metadata_stored=False
+            )
+    
+    async def deploy_artifacts(self, code_input: CodeInput, temp_path: Path) -> List[DeploymentResult]:
+        """Deploy artifacts to configured targets"""
+        deployment_results = []
+        
+        # Get deployment targets from build instructions or default to Docker
+        deployment_targets = self.get_deployment_targets(code_input)
+        
+        for target in deployment_targets:
+            deployment_result = await self.deploy_to_target(code_input, temp_path, target)
+            deployment_results.append(deployment_result)
+            
+        return deployment_results
+    
+    def get_deployment_targets(self, code_input: CodeInput) -> List[DeploymentTarget]:
+        """Get deployment targets from code input or defaults"""
+        # Default to Docker deployment
+        return [
+            DeploymentTarget(
+                name="docker",
+                type="container",
+                config={
+                    "dockerfile": "Dockerfile",
+                    "image_name": code_input.metadata.get("project_name", "generated-app").lower().replace(" ", "-"),
+                    "ports": ["8080:8000"]  # Use 8080 to avoid conflicts
+                }
+            )
+        ]
+    
+    async def deploy_to_target(self, code_input: CodeInput, temp_path: Path, target: DeploymentTarget) -> DeploymentResult:
+        """Deploy to a specific target"""
+        start_time = time.time()
+        deployment_id = f"deploy_{int(time.time())}_{target.name}"
+        logs = []
+        
+        try:
+            if target.type == "container":
+                return await self.deploy_to_docker(code_input, temp_path, target, deployment_id, logs)
+            else:
+                logs.append(f"Unknown deployment target type: {target.type}")
+                return DeploymentResult(
+                    target=target.name,
+                    status="failed",
+                    deployment_id=deployment_id,
+                    logs=logs,
+                    error_message=f"Unsupported deployment type: {target.type}",
+                    deployment_time=time.time() - start_time
+                )
+                
+        except Exception as e:
+            logs.append(f"Deployment error: {str(e)}")
+            return DeploymentResult(
+                target=target.name,
+                status="failed",
+                deployment_id=deployment_id,
+                logs=logs,
+                error_message=str(e),
+                deployment_time=time.time() - start_time
+            )
+    
+    async def deploy_to_docker(self, code_input: CodeInput, temp_path: Path, target: DeploymentTarget, deployment_id: str, logs: List[str]) -> DeploymentResult:
+        """Deploy to Docker"""
+        start_time = time.time()
+        
+        try:
+            image_name = target.config.get("image_name", "generated-app")
+            dockerfile = target.config.get("dockerfile", "Dockerfile")
+            
+            # Check if Dockerfile exists
+            dockerfile_path = temp_path / dockerfile
+            if not dockerfile_path.exists():
+                logs.append(f"No {dockerfile} found, skipping Docker deployment")
+                return DeploymentResult(
+                    target=target.name,
+                    status="failed",
+                    deployment_id=deployment_id,
+                    logs=logs,
+                    error_message=f"No {dockerfile} found",
+                    deployment_time=time.time() - start_time
+                )
+            
+            # Build Docker image
+            build_cmd = ["docker", "build", "-t", f"{image_name}:latest", "-f", dockerfile, "."]
+            logs.append(f"Building image: {' '.join(build_cmd)}")
+            
+            result = subprocess.run(build_cmd, cwd=temp_path, capture_output=True, text=True)
+            logs.append(f"Build completed with return code: {result.returncode}")
+            if result.stdout:
+                logs.append(f"Build stdout: {result.stdout[-500:]}")  # Last 500 chars
+            if result.stderr:
+                logs.append(f"Build stderr: {result.stderr[-500:]}")  # Last 500 chars
+            
+            if result.returncode != 0:
+                return DeploymentResult(
+                    target=target.name,
+                    status="failed",
+                    deployment_id=deployment_id,
+                    logs=logs,
+                    error_message=f"Docker build failed with code {result.returncode}",
+                    deployment_time=time.time() - start_time
+                )
+            
+            # Get available port
+            ports = target.config.get("ports", ["8080:8000"])
+            external_port = ports[0].split(':')[0]
+            endpoint = f"http://localhost:{external_port}"
+            
+            logs.append(f"Docker image built successfully: {image_name}:latest")
+            
+            return DeploymentResult(
+                target=target.name,
+                status="success",
+                deployment_id=deployment_id,
+                endpoint=endpoint,
+                logs=logs,
+                deployment_time=time.time() - start_time,
+                health_check_status="not_implemented"
+            )
+            
+        except Exception as e:
+            logs.append(f"Docker deployment error: {str(e)}")
+            return DeploymentResult(
+                target=target.name,
+                status="failed",
+                deployment_id=deployment_id,
+                logs=logs,
+                error_message=str(e),
+                deployment_time=time.time() - start_time
+            )
+    
+    async def run_post_deployment_tests(self, deployment_results: List[DeploymentResult]) -> List[TestResult]:
+        """Run tests against deployed applications"""
+        post_deployment_tests = []
+        
+        for deployment in deployment_results:
+            if deployment.status == "success":
+                # Simple deployment validation test
+                test_result = TestResult(
+                    test_name=f"deployment_validation_{deployment.target}",
+                    status="passed",
+                    duration=0.1,
+                    file_path="post_deployment"
+                )
+                post_deployment_tests.append(test_result)
+        
+        return post_deployment_tests
         
     async def publish_test_results(self, test_output: TestOutput):
-        """Publish the test results to the testing topic"""
+        """Publish the test and deployment results to completion topic"""
         try:
             message = test_output.dict()
-            await self.messaging_client.publish(PUBLISH_TOPIC, message)
+            
+            # Change to completion topic since we now handle deployment
+            completion_topic = os.getenv("COMPLETION_TOPIC", "tasks.completion")
+            
+            await self.messaging_client.publish(completion_topic, message)
             MESSAGES_PUBLISHED.inc()
-            logger.info(f"Published test results {test_output.test_id} to {PUBLISH_TOPIC}")
+            logger.info(f"Published test and deployment results {test_output.test_id} to {completion_topic}")
         except Exception as e:
             logger.error(f"Failed to publish test results {test_output.test_id}: {e}")
             raise

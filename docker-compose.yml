@@ -108,13 +108,18 @@ services:
     depends_on:
       - message-broker
       - code-agent
+      - git-server
     environment:
       BROKER_URL: amqp://guest:guest@message-broker:5672/
+      GIT_URL: http://git-server:3000
       LOG_LEVEL: INFO
       SUBSCRIBE_TOPIC: tasks.testing
-      PUBLISH_TOPIC: tasks.deployment
+      PUBLISH_TOPIC: tasks.testing
+      COMPLETION_TOPIC: tasks.completion
     ports:
       - "8006:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # For Docker-in-Docker deployment
 
   orchestrator-agent:
     build:
@@ -127,7 +132,7 @@ services:
       BROKER_URL: amqp://guest:guest@message-broker:5672/
       DASHBOARD_WS_URL: ws://orchestrator-agent:8000/ws
       LOG_LEVEL: INFO
-      SUBSCRIBE_TOPICS: tasks.analysis,tasks.planning,tasks.blueprint,tasks.coding,tasks.testing,tasks.deployment
+      SUBSCRIBE_TOPICS: tasks.analysis,tasks.planning,tasks.blueprint,tasks.coding,tasks.testing,tasks.completion
     ports:
       - "8002:8000"
 

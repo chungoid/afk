@@ -19,7 +19,7 @@ The system is built as a distributed microservices architecture with the followi
 - **Planning Agent** (Port 8003): Project planning and task sequencing
 - **Blueprint Agent** (Port 8004): Architecture design and technical specifications
 - **Code Agent** (Port 8005): Code generation and implementation
-- **Test Agent** (Port 8006): Automated testing and quality assurance
+- **Test & Deploy Agent** (Port 8006): Automated testing, quality assurance, artifact persistence, and deployment
 
 #### Infrastructure Services
 - **RabbitMQ** (Port 5672/15672): Message broker for inter-agent communication
@@ -35,7 +35,7 @@ The system is built as a distributed microservices architecture with the followi
 2. **Planning Stage**: Tasks are prioritized, sequenced, and organized into a project plan
 3. **Blueprint Stage**: Technical architecture, database schemas, and API specifications are designed
 4. **Coding Stage**: Code is generated based on blueprints and requirements
-5. **Testing Stage**: Automated tests are created and executed with quality metrics
+5. **Testing & Deployment Stage**: Automated tests are executed, artifacts are persisted to Git, and successful projects are deployed
 6. **Orchestration**: Cross-stage coordination, monitoring, and pipeline management
 
 ## Prerequisites
