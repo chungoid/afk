@@ -1,0 +1,134 @@
+{
+  "llm": {
+    "provider": {
+      "doc": "LLM provider to use",
+      "format": ["openai", "anthropic"],
+      "default": "openai",
+      "env": "LLM_PROVIDER"
+    },
+    "model": {
+      "doc": "Model name for LLM calls",
+      "format": String,
+      "default": "gpt-4o",
+      "env": "LLM_MODEL"
+    },
+    "temperature": {
+      "doc": "Sampling temperature for LLM",
+      "format": Number,
+      "default": 0.2,
+      "env": "LLM_TEMPERATURE"
+    },
+    "maxTokens": {
+      "doc": "Max tokens for LLM response",
+      "format": Number,
+      "default": 2048,
+      "env": "LLM_MAX_TOKENS"
+    },
+    "apiKey": {
+      "doc": "API key for OpenAI or Anthropic",
+      "format": String,
+      "default": "",
+      "env": "LLM_API_KEY"
+    },
+    "baseUrl": {
+      "doc": "Base URL for LLM API",
+      "format": String,
+      "default": "https://api.openai.com/v1",
+      "env": "LLM_API_BASE_URL"
+    }
+  },
+  "pinecone": {
+    "apiKey": {
+      "doc": "Pinecone API Key",
+      "format": String,
+      "default": "",
+      "env": "PINECONE_API_KEY"
+    },
+    "environment": {
+      "doc": "Pinecone environment",
+      "format": String,
+      "default": "",
+      "env": "PINECONE_ENVIRONMENT"
+    },
+    "indexName": {
+      "doc": "Pinecone index name",
+      "format": String,
+      "default": "analysis-agent",
+      "env": "PINECONE_INDEX"
+    },
+    "namespace": {
+      "doc": "Pinecone namespace",
+      "format": String,
+      "default": "default",
+      "env": "PINECONE_NAMESPACE"
+    },
+    "topK": {
+      "doc": "Number of vectors to retrieve for RAG",
+      "format": Number,
+      "default": 5,
+      "env": "PINECONE_TOPK"
+    }
+  },
+  "mcp": {
+    "url": {
+      "doc": "MCP broker URL",
+      "format": String,
+      "default": "amqp://localhost",
+      "env": "MCP_URL"
+    },
+    "username": {
+      "doc": "MCP broker username",
+      "format": String,
+      "default": "guest",
+      "env": "MCP_USERNAME"
+    },
+    "password": {
+      "doc": "MCP broker password",
+      "format": String,
+      "default": "guest",
+      "env": "MCP_PASSWORD"
+    },
+    "exchange": {
+      "doc": "Topic to publish analysis tasks",
+      "format": String,
+      "default": "tasks.analysis",
+      "env": "MCP_EXCHANGE"
+    },
+    "exchangeType": {
+      "doc": "Exchange type for MCP",
+      "format": ["topic", "direct", "fanout"],
+      "default": "topic",
+      "env": "MCP_EXCHANGE_TYPE"
+    },
+    "durable": {
+      "doc": "Whether the exchange is durable",
+      "format": Boolean,
+      "default": true,
+      "env": "MCP_DURABLE"
+    }
+  },
+  "schema": {
+    "taskFilePath": {
+      "doc": "Path to the JSON Schema for Task objects",
+      "format": String,
+      "default": "src/config/schema/task.schema.json",
+      "env": "TASK_SCHEMA_PATH"
+    }
+  },
+  "vector": {
+    "dimension": {
+      "doc": "Dimension of embedding vectors",
+      "format": Number,
+      "default": 1536,
+      "env": "VECTOR_DIMENSION"
+    }
+  },
+  "logging": {
+    "level": {
+      "doc": "Logging level",
+      "format": ["error", "warn", "info", "debug"],
+      "default": "info",
+      "env": "LOG_LEVEL"
+    }
+  }
+}

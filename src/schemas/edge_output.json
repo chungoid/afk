@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EdgeCaseOutput",
+  "type": "object",
+  "properties": {
+    "edge_cases": {
+      "description": "List of edge case entries for each subtask",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "subtask_id": {
+            "type": "string",
+            "description": "ID of the subtask to which these edge cases apply"
+          },
+          "edge_cases": {
+            "type": "array",
+            "description": "List of identified edge cases for the subtask",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "subtask_id",
+          "edge_cases"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "edge_cases"
+  ],
+  "additionalProperties": false
+}

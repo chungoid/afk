@@ -1,0 +1,123 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blueprint-agent-config
+  namespace: pipeline
+data:
+  SWARMS_ENABLED: "true"
+  SWARMS_DISCOVERY_TOPIC: "swarms-discovery"
+  SUBSCRIBE_TOPIC: "tasks.planning"
+  PUBLISH_TOPIC: "tasks.blueprint"
+  LOG_LEVEL: "INFO"
+  METRICS_PORT: "9000"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blueprint-agent
+  namespace: pipeline
+  labels:
+    app: blueprint-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: blueprint-agent
+  template:
+    metadata:
+      labels:
+        app: blueprint-agent
+    spec:
+      containers:
+        - name: blueprint-agent
+          image: myregistry/blueprint-agent:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+            - name: metrics
+              containerPort: 9000
+          envFrom:
+            - configMapRef:
+                name: blueprint-agent-config
+          env:
+            - name: BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pipeline-mcp-secret
+                  key: broker-url
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pipeline-llm-secret
+                  key: openai-api-key
+            - name: VECTORSTORE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pipeline-vectorstore-secret
+                  key: url
+            - name: VECTORSTORE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pipeline-vectorstore-secret
+                  key: api-key
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "200Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: blueprint-agent
+  namespace: pipeline
+spec:
+  selector:
+    app: blueprint-agent
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8000
+    - name: metrics
+      protocol: TCP
+      port: 9000
+      targetPort: 9000
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: blueprint-agent
+  namespace: pipeline
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: blueprint-agent
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

@@ -1,0 +1,53 @@
+redis:
+  url: ${REDIS_URL:redis://localhost:6379}
+  username: ${REDIS_USERNAME:}
+  password: ${REDIS_PASSWORD:}
+  db: ${REDIS_DB:0}
+  connectTimeout: 10000
+  retryStrategy:
+    retriesPerRequest: 5
+    retryDelay: 1000
+
+streams:
+  tasks.analysis:
+    group: analysis-agent-group
+    consumerCount: 1
+    maxLenApprox: 10000
+    trimStrategy: LATEST
+    blockTimeoutMs: 5000
+  tasks.planning:
+    group: planning-agent-group
+    consumerCount: 1
+    maxLenApprox: 10000
+    trimStrategy: LATEST
+    blockTimeoutMs: 5000
+  tasks.blueprint:
+    group: blueprint-agent-group
+    consumerCount: 1
+    maxLenApprox: 10000
+    trimStrategy: LATEST
+    blockTimeoutMs: 5000
+  tasks.coding:
+    group: code-agent-group
+    consumerCount: auto
+    maxLenApprox: 50000
+    trimStrategy: LATEST
+    blockTimeoutMs: 5000
+  tasks.testing:
+    group: testing-agent-group
+    consumerCount: 1
+    maxLenApprox: 10000
+    trimStrategy: LATEST
+    blockTimeoutMs: 5000
+  orchestrator:
+    group: orchestrator-agent-group
+    consumerCount: 1
+    maxLenApprox: 10000
+    trimStrategy: LATEST
+    blockTimeoutMs: 5000
+
+consumerDefaults:
+  readCount: 10
+  noAck: false
+  retryBackoffMs: 2000
+  maxRetries: 3

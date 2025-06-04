@@ -1,0 +1,60 @@
+groups:
+- name: multi_agent_pipeline
+  rules:
+  - record: pipeline:messages_per_second:topic:rate
+    expr: rate(mlp_messages_published_total{topic=~"tasks\\..+"}[1m])
+    labels:
+      unit: messages_per_second
+  - record: pipeline:processing_latency_seconds:99quantile:stage
+    expr: histogram_quantile(0.99, sum by (le,stage) (rate(mlp_processing_duration_seconds_bucket{stage=~".+"}[5m])))
+  - record: pipeline:error_rate:stage
+    expr: sum by (stage) (rate(mlp_errors_total{stage=~".+"}[5m])) / sum by (stage) (rate(mlp_processing_duration_seconds_count{stage=~".+"}[5m]))
+  - record: pipeline:retry_count:stage
+    expr: sum by (stage) (rate(mlp_retries_total{stage=~".+"}[5m]))
+  - record: pipeline:delivery_success_ratio
+    expr: sum(rate(mlp_messages_delivered_total{topic=~"tasks\\..+"}[5m])) / sum(rate(mlp_messages_sent_total{topic=~"tasks\\..+"}[5m]))
+
+  - alert: HighMessageLag
+    expr: mlp_queue_lag_seconds{topic=~"tasks\\..+"} > 60
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High message lag for {{ $labels.topic }}"
+      description: "The head-of-line lag for topic {{ $labels.topic }} has exceeded 60s (current: {{ $value }}s)."
+
+  - alert: HighErrorRate
+    expr: pipeline:error_rate:stage > 0.05
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "High error rate for stage {{ $labels.stage }}"
+      description: "Error rate is {{ printf \"%.2f\" (mul $value 100) }}% over the last 5 minutes."
+
+  - alert: LowDeliverySuccessRatio
+    expr: pipeline:delivery_success_ratio < 0.95
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Low message delivery success ratio"
+      description: "Delivery success ratio is below 95% ({{ printf \"%.2f\" (mul $value 100) }}%) for tasks topics over the last 5m."
+
+  - alert: HighProcessingLatencyP99
+    expr: pipeline:processing_latency_seconds:99quantile:stage > 1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High 99th percentile processing latency"
+      description: "Processing latency p99 is {{ $value }}s for stage {{ $labels.stage }}."
+
+  - alert: HighRetryCount
+    expr: pipeline:retry_count:stage > 10
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High retry count in stage {{ $labels.stage }}"
+      description: "{{ $value }} retries in the last 5 minutes, indicating potential instability."

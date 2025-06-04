@@ -1,0 +1,122 @@
+name: CI/CD Pipeline
+
+concurrency:
+  group: ci-${{ github.ref_name }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}
+
+jobs:
+  test:
+    name: Test ${{ matrix.agent }} Agent
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        agent:
+          - analysis
+          - planning
+          - blueprint
+          - coding
+          - testing
+          - orchestrator
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('agents/${{ matrix.agent }}/requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          cd agents/${{ matrix.agent }}
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Lint with flake8
+        run: |
+          cd agents/${{ matrix.agent }}
+          if command -v flake8; then flake8 .; fi
+
+      - name: Run tests
+        run: |
+          cd agents/${{ matrix.agent }}
+          if [ -d tests ]; then pytest --maxfail=1 --disable-warnings -q; fi
+
+  build-and-push:
+    name: Build & Push Docker Image ${{ matrix.agent }}
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      matrix:
+        agent:
+          - analysis
+          - planning
+          - blueprint
+          - coding
+          - testing
+          - orchestrator
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Log in to Docker registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: agents/${{ matrix.agent }}
+          file: agents/${{ matrix.agent }}/Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/pipeline-${{ matrix.agent }}:${{ github.sha }}
+            ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/pipeline-${{ matrix.agent }}:latest
+
+  deploy:
+    name: Deploy Agents to Staging
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure kubeconfig
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 --decode > $HOME/.kube/config
+
+      - name: Deploy agent images
+        env:
+          DOCKER_REGISTRY: ${{ env.DOCKER_REGISTRY }}
+          IMAGE_NAMESPACE: ${{ env.IMAGE_NAMESPACE }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          for AGENT in analysis planning blueprint coding testing orchestrator; do
+            kubectl set image deployment/$AGENT-agent $AGENT-agent=$DOCKER_REGISTRY/$IMAGE_NAMESPACE/pipeline-$AGENT:$GITHUB_SHA --namespace=staging || \
+            kubectl apply -f k8s/$AGENT-deployment.yml --namespace=staging
+          done

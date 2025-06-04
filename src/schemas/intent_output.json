@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IntentOutput",
+  "description": "Schema for the output of the intent analysis step",
+  "type": "object",
+  "properties": {
+    "intent": {
+      "type": "string",
+      "description": "The high-level intent extracted from the requirement"
+    }
+  },
+  "required": ["intent"],
+  "additionalProperties": false
+}

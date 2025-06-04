@@ -1,0 +1,57 @@
+vectorstore:
+  default: pinecone  # options: pinecone, weaviate
+  pinecone:
+    api_key: ${PINECONE_API_KEY}
+    environment: ${PINECONE_ENVIRONMENT}
+    index_name: ${PINECONE_INDEX_NAME:default-index}
+    namespace: ${PINECONE_NAMESPACE:default}
+    metric: ${PINECONE_METRIC:cosine}
+    dimension: ${PINECONE_DIMENSION:1536}
+    timeout: ${PINECONE_TIMEOUT:30}
+    # optional: specify upsert batch size, if supported
+    batch_size: ${PINECONE_BATCH_SIZE:100}
+
+  weaviate:
+    url: ${WEAVIATE_URL:http://localhost:8080}
+    api_key: ${WEAVIATE_API_KEY:}
+    index_name: ${WEAVIATE_INDEX_NAME:VectorIndex}
+    vectorizer: ${WEAVIATE_VECTORIZER:}
+    timeout: ${WEAVIATE_TIMEOUT:30}
+    # optional: weaviate auth/headers
+    headers:
+      Authorization: ${WEAVIATE_AUTH_HEADER:}
+
+embedding:
+  model_name: ${EMBEDDING_MODEL_NAME:text-embedding-ada-002}
+  max_tokens: ${EMBEDDING_MAX_TOKENS:8191}
+  chunking:
+    chunk_size: ${EMBEDDING_CHUNK_SIZE:1000}
+    chunk_overlap: ${EMBEDDING_CHUNK_OVERLAP:100}
+
+retrieval:
+  top_k: ${RETRIEVAL_TOP_K:5}
+  score_threshold: ${RETRIEVAL_SCORE_THRESHOLD:0.0}
+  include_metadata: ${RETRIEVAL_INCLUDE_METADATA:true}
+  # if using hybrid search
+  hybrid:
+    enabled: ${RETRIEVAL_HYBRID_ENABLED:false}
+    alpha: ${RETRIEVAL_HYBRID_ALPHA:0.5}
+
+azure_openai:
+  enabled: ${AZURE_OPENAI_ENABLED:false}
+  endpoint: ${AZURE_OPENAI_ENDPOINT:}
+  api_key: ${AZURE_OPENAI_API_KEY:}
+  deployment_name: ${AZURE_OPENAI_DEPLOYMENT_NAME:}
+
+openai:
+  enabled: ${OPENAI_ENABLED:true}
+  api_key: ${OPENAI_API_KEY}
+  organization: ${OPENAI_ORGANIZATION:}
+  rate_limit:
+    max_requests_per_minute: ${OPENAI_MAX_RPM:60}
+    max_tokens_per_minute: ${OPENAI_MAX_TPM:150000}
+
+logging:
+  level: ${VECTORSTORE_LOG_LEVEL:INFO}
+  format: json
+  destination: ${VECTORSTORE_LOG_DESTINATION:stdout}

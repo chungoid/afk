@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Decompose Step Input",
+  "description": "Schema for input to the decompose step, containing the intent object returned by the intent detection step.",
+  "type": "object",
+  "properties": {
+    "intent": {
+      "$ref": "intent_output.json"
+    }
+  },
+  "required": ["intent"],
+  "additionalProperties": false
+}

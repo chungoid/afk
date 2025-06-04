@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Task",
+  "description": "JSON Schema for a Task object in the Analysis Agent pipeline",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "description": "Unique identifier for the task"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short title or summary of the task"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Detailed description of the task"
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true,
+      "description": "List of task IDs that this task depends on"
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "Priority of the task; 1 (highest) to 5 (lowest)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "in_progress", "completed"],
+      "description": "Current status of the task"
+    },
+    "assignee": {
+      "type": ["string", "null"],
+      "description": "Identifier of the assignee responsible for this task"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the task was created"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Due date for the task in YYYY-MM-DD format"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Arbitrary metadata for extensibility"
+    }
+  },
+  "required": ["id", "title", "description"],
+  "additionalProperties": false
+}

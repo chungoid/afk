@@ -1,0 +1,11 @@
+{
+  "intentExtraction": {
+    "template": "You are a helpful assistant. Given the following project requirement:\n\n{{requirement}}\n\nExtract the primary intents that the user expects. Respond in JSON with two fields:\n  \"intents\": an array of concise intent descriptions,\n  \"confidence\": a number between 0 and 1 indicating your confidence in the extracted intents."
+  },
+  "edgeCaseProbing": {
+    "template": "You are a critical analyst. Given the initial requirement and extracted intents:\n\nRequirement:\n{{requirement}}\n\nIntents:\n{{intents}}\n\nIdentify any potential edge cases, ambiguities, or missing considerations that could impact task success. Respond in JSON with two fields:\n  \"probes\": an array of identified edge cases or questions,\n  \"confidence\": a number between 0 and 1 indicating your confidence in the probes."
+  },
+  "taskSegmentation": {
+    "template": "You are a project manager assistant. Based on the project requirement, intents, and edge case probes below:\n\nRequirement:\n{{requirement}}\n\nIntents:\n{{intents}}\n\nEdge Case Probes:\n{{probes}}\n\nBreak down the work into a list of actionable tasks. Respond in JSON as an object with a single field \"tasks\", which is an array of task objects. Each task object must include:\n  \"id\": a unique string identifier,\n  \"description\": a concise description of the task,\n  \"dependencies\": an optional array of task IDs this task depends on,\n  \"metadata\": an optional object for any additional context.\n\nEnsure the tasks collectively cover all aspects indicated by the intents and address the identified edge cases."
+  }
+}

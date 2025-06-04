@@ -1,0 +1,86 @@
+kafka:
+  bootstrapServers:
+    - kafka1:9092
+    - kafka2:9092
+    - kafka3:9092
+  clientId: multi-agent-pipeline
+  securityProtocol: PLAINTEXT
+  retry:
+    retries: 5
+    retryBackoffMs: 300
+  ssl:
+    enabled: false
+
+  topics:
+    tasks.analysis:
+      partitions: 3
+      replicationFactor: 1
+      config:
+        retention.ms: 604800000
+    tasks.planning:
+      partitions: 3
+      replicationFactor: 1
+      config:
+        retention.ms: 604800000
+    tasks.blueprint:
+      partitions: 3
+      replicationFactor: 1
+      config:
+        retention.ms: 604800000
+    tasks.coding:
+      partitions: 5
+      replicationFactor: 1
+      config:
+        retention.ms: 604800000
+    tasks.testing:
+      partitions: 3
+      replicationFactor: 1
+      config:
+        retention.ms: 604800000
+
+  producer:
+    acks: all
+    timeoutMs: 30000
+    compressionType: gzip
+    maxInFlightRequests: 1
+
+  consumers:
+    analysisAgent:
+      groupId: analysis-agent-group
+      maxPollRecords: 10
+      concurrency: 1
+      autoOffsetReset: earliest
+      enableAutoCommit: false
+    planningAgent:
+      groupId: planning-agent-group
+      maxPollRecords: 10
+      concurrency: 1
+      autoOffsetReset: earliest
+      enableAutoCommit: false
+    blueprintAgent:
+      groupId: blueprint-agent-group
+      maxPollRecords: 10
+      concurrency: 1
+      autoOffsetReset: earliest
+      enableAutoCommit: false
+    codeAgent:
+      groupId: code-agent-group
+      maxPollRecords: 20
+      concurrency: 5
+      autoOffsetReset: earliest
+      enableAutoCommit: false
+    testAgent:
+      groupId: test-agent-group
+      maxPollRecords: 10
+      concurrency: 1
+      autoOffsetReset: earliest
+      enableAutoCommit: false
+
+  consumerConfig:
+    heartbeatIntervalMs: 3000
+    sessionTimeoutMs: 10000
+    fetchMaxBytes: 1048576
+    maxPartitionFetchBytes: 1048576
+    requestTimeoutMs: 20000
+    retryBackoffMs: 1000
+    maxPollIntervalMs: 300000

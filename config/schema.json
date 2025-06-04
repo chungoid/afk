@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Application Configuration Schema",
+  "description": "JSON Schema for validating application configuration files under config/",
+  "type": "object",
+  "properties": {
+    "server": {
+      "type": "object",
+      "description": "Server configuration settings",
+      "properties": {
+        "host": {
+          "type": "string",
+          "format": "ipv4",
+          "description": "Server bind address"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Port on which the server listens"
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Request timeout in milliseconds"
+        }
+      },
+      "required": ["host", "port"],
+      "additionalProperties": false
+    },
+    "database": {
+      "type": "object",
+      "description": "Database connection settings",
+      "properties": {
+        "client": {
+          "type": "string",
+          "enum": ["pg", "mysql", "sqlite3", "mssql"],
+          "description": "Database client/driver"
+        },
+        "connection": {
+          "type": "object",
+          "description": "Connection details for the database",
+          "properties": {
+            "host": { "type": "string", "description": "Database host" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535, "description": "Database port" },
+            "user": { "type": "string", "description": "Database user" },
+            "password": { "type": "string", "description": "Database password" },
+            "database": { "type": "string", "description": "Database name" },
+            "filename": { "type": "string", "description": "SQLite filename, if using sqlite3" }
+          },
+          "required": ["host", "port", "user", "password", "database"],
+          "additionalProperties": false
+        },
+        "pool": {
+          "type": "object",
+          "description": "Connection pool settings",
+          "properties": {
+            "min": { "type": "integer", "minimum": 0, "description": "Minimum pool size" },
+            "max": { "type": "integer", "minimum": 1, "description": "Maximum pool size" }
+          },
+          "required": ["min", "max"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["client", "connection"],
+      "additionalProperties": false
+    },
+    "logging": {
+      "type": "object",
+      "description": "Logging configuration",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error"],
+          "description": "Logging verbosity level"
+        },
+        "directory": {
+          "type": "string",
+          "description": "Directory path for log files"
+        },
+        "filename": {
+          "type": "string",
+          "description": "Base name for log files"
+        },
+        "maxSize": {
+          "type": "string",
+          "pattern": "^\\d+(k|m|g)?$",
+          "description": "Maximum log file size before rotation (e.g., '10m')"
+        },
+        "maxFiles": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of rotated log files to keep"
+        }
+      },
+      "required": ["level"],
+      "additionalProperties": false
+    },
+    "features": {
+      "type": "object",
+      "description": "Toggleable feature flags",
+      "patternProperties": {
+        "^[a-z0-9\\-]+$": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "security": {
+      "type": "object",
+      "description": "Security-related settings",
+      "properties": {
+        "jwt": {
+          "type": "object",
+          "description": "JWT authentication settings",
+          "properties": {
+            "secret": { "type": "string", "minLength": 32, "description": "JWT signing secret" },
+            "expiresIn": { "type": "string", "description": "Token expiration (e.g., '1h')" }
+          },
+          "required": ["secret", "expiresIn"],
+          "additionalProperties": false
+        },
+        "cors": {
+          "type": "object",
+          "description": "CORS configuration",
+          "properties": {
+            "origin": { "type": ["string", "array"], "description": "Allowed origin(s)" },
+            "methods": { "type": "array", "items": { "type": "string" }, "description": "Allowed HTTP methods" },
+            "credentials": { "type": "boolean", "description": "Allow credentials in CORS requests" }
+          },
+          "required": ["origin"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["jwt"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["server", "database", "logging"],
+  "additionalProperties": false
+}

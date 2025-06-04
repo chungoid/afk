@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Intent Extraction Output",
+  "description": "Schema for the output of the intent extraction step",
+  "type": "object",
+  "properties": {
+    "intent": {
+      "type": "string",
+      "description": "High-level intent derived from the user input",
+      "minLength": 1
+    },
+    "entities": {
+      "type": "array",
+      "description": "List of recognized entities",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The type or name of the entity",
+            "minLength": 1
+          },
+          "value": {
+            "description": "The value of the extracted entity",
+            "oneOf": [
+              { "type": "string" },
+              { "type": "number" },
+              { "type": "boolean" },
+              { "type": "object" },
+              { "type": "array" }
+            ]
+          }
+        },
+        "required": ["name", "value"],
+        "additionalProperties": false
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Confidence score of the intent extraction (0.0 - 1.0)",
+      "minimum": 0.0,
+      "maximum": 1.0
+    }
+  },
+  "required": ["intent"],
+  "additionalProperties": false
+}

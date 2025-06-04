@@ -1,0 +1,102 @@
+openai:
+  api_key: "${OPENAI_API_KEY}"
+  base_url: "${OPENAI_BASE_URL:-https://api.openai.com}"
+  timeout: 60
+  default_model: "gpt-4"
+  models:
+    analysis:
+      name: "gpt-4"
+      temperature: 0.2
+      max_tokens: 2048
+    planning:
+      name: "gpt-4"
+      temperature: 0.3
+      max_tokens: 2048
+    blueprint:
+      name: "gpt-4-0613"
+      temperature: 0.3
+      max_tokens: 2048
+    coding:
+      name: "gpt-4-turbo"
+      temperature: 0.0
+      max_tokens: 4096
+    testing:
+      name: "gpt-4-turbo"
+      temperature: 0.0
+      max_tokens: 2048
+  top_p: 1.0
+  frequency_penalty: 0.0
+  presence_penalty: 0.0
+  retry:
+    max_attempts: 3
+    backoff_factor: 2
+    initial_delay_seconds: 1
+
+azure_openai:
+  enabled: false
+  api_version: "2023-05-15"
+  resource_name: "${AZURE_OPENAI_RESOURCE_NAME}"
+  endpoint: "${AZURE_OPENAI_ENDPOINT}"
+  deployments:
+    analysis: "${AZURE_DEPLOYMENT_ANALYSIS}"
+    planning: "${AZURE_DEPLOYMENT_PLANNING}"
+    blueprint: "${AZURE_DEPLOYMENT_BLUEPRINT}"
+    coding: "${AZURE_DEPLOYMENT_CODING}"
+    testing: "${AZURE_DEPLOYMENT_TESTING}"
+
+embedding:
+  model: "text-embedding-3-small"
+  timeout_seconds: 60
+
+vector_store:
+  provider: "pinecone" # or "weaviate"
+  pinecone:
+    api_key: "${PINECONE_API_KEY}"
+    environment: "${PINECONE_ENVIRONMENT}"
+    index_name: "multi-agent-index"
+  weaviate:
+    url: "${WEAVIATE_URL}"
+    api_key: "${WEAVIATE_API_KEY}"
+    index_name: "multi-agent-index"
+
+rag:
+  chunk_size: 500
+  chunk_overlap: 50
+  retrieve_k: 5
+
+logging:
+  level: "INFO"
+  format: "[%(asctime)s] %(levelname)s %(name)s: %(message)s"
+  user_agent: "multi-agent-pipeline/1.0.0"
+
+swarms:
+  enabled: true
+  discovery_topic: "agent.discovery"
+  fallback_timeout_seconds: 5
+
+messaging:
+  mcp_use:
+    bootstrap_servers: "${MCP_USE_BOOTSTRAP_SERVERS}"
+    ssl:
+      enabled: true
+      ca_file: "${MCP_USE_SSL_CA}"
+      cert_file: "${MCP_USE_SSL_CERT}"
+      key_file: "${MCP_USE_SSL_KEY}"
+    topics:
+      analysis: "tasks.analysis"
+      planning: "tasks.planning"
+      blueprint: "tasks.blueprint"
+      coding: "tasks.coding"
+      testing: "tasks.testing"
+      orchestration: "orchestration.events"
+
+metrics:
+  prometheus:
+    enabled: true
+    port: 8000
+    namespace: "multi_agent_pipeline"
+
+timeouts:
+  http_request_seconds: 60
+  grpc_request_seconds: 30
+  backoff_max_delay_seconds: 120

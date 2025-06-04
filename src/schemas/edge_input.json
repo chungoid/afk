@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EdgeCaseInput",
+  "description": "Input schema for the edge case generation step",
+  "type": "object",
+  "properties": {
+    "requirement": {
+      "type": "string",
+      "description": "The original user requirement."
+    },
+    "intent": {
+      "type": "string",
+      "description": "Determined user intent from the intent analysis step."
+    },
+    "subtasks": {
+      "type": "array",
+      "description": "List of subtasks produced by the decomposition step.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the subtask."
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed description of the subtask."
+          }
+        },
+        "required": ["title", "description"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["requirement", "intent", "subtasks"],
+  "additionalProperties": false
+}

@@ -1,0 +1,28 @@
+cluster:
+  name: multi-agent-pipeline
+  replicationFactor: 3
+node:
+  id: "${POD_NAME:-agent}-${HOSTNAME}-${NODE_UUID}"
+  host: "0.0.0.0"
+  port: ${SWARM_PORT:7000}
+peers:
+  - host: "${SWARM_SEED_NODE_1:swarm-0.pipeline.svc.cluster.local}"
+    port: ${SWARM_PORT:7000}
+  - host: "${SWARM_SEED_NODE_2:swarm-1.pipeline.svc.cluster.local}"
+    port: ${SWARM_PORT:7000}
+  - host: "${SWARM_SEED_NODE_3:swarm-2.pipeline.svc.cluster.local}"
+    port: ${SWARM_PORT:7000}
+discovery:
+  type: dns
+  record: swarms-headless.pipeline.svc.cluster.local
+  refreshIntervalMs: 60000
+heartbeat:
+  intervalMs: 2000
+  timeoutMs: 5000
+join:
+  retryIntervalMs: 3000
+  maxAttempts: 5
+logging:
+  level: info
+  json: true
+  output: stdout

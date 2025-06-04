@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "http://example.com/schemas/tasks.schema.json",
+  "title": "Task",
+  "description": "A Task object represents a unit of work with optional nested subtasks.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "description": "Unique identifier for the task",
+      "type": "string"
+    },
+    "description": {
+      "description": "Human-readable description of the task",
+      "type": "string"
+    },
+    "metadata": {
+      "description": "Auxiliary data about the task",
+      "type": "object",
+      "properties": {
+        "priority": {
+          "description": "Priority level of the task",
+          "type": "number"
+        },
+        "sourceRequirementId": {
+          "description": "Identifier of the originating requirement",
+          "type": "string"
+        }
+      },
+      "required": ["priority", "sourceRequirementId"],
+      "additionalProperties": true
+    },
+    "subtasks": {
+      "description": "Optional list of nested subtasks",
+      "type": "array",
+      "items": {
+        "$ref": "#"
+      }
+    }
+  },
+  "required": ["id", "description", "metadata"],
+  "additionalProperties": false
+}

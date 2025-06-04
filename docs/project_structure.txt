@@ -1,0 +1,39 @@
+.  
+├── src  
+│   ├── controllers  
+│   │   ├── user-controller.js  
+│   │   └── auth-controller.js  
+│   ├── services  
+│   │   ├── user-service.js  
+│   │   └── auth-service.js  
+│   ├── agents  
+│   │   └── analysis-agent.js  
+│   ├── utils  
+│   │   ├── logger.js  
+│   │   └── file-helper.js  
+│   └── index.js  
+├── tests  
+│   ├── controllers  
+│   │   ├── user-controller.test.js  
+│   │   └── auth-controller.test.js  
+│   ├── services  
+│   │   ├── user-service.test.js  
+│   │   └── auth-service.test.js  
+│   ├── agents  
+│   │   └── analysis-agent.test.js  
+│   └── utils  
+│       ├── logger.test.js  
+│       └── file-helper.test.js  
+├── config  
+│   ├── default.json  
+│   ├── development.json  
+│   └── schema.json  
+├── docs  
+│   ├── project_structure.txt  
+│   ├── iteration4_mapping.md  
+│   └── README.md  
+├── archive  
+│   └── legacy-helper.js  
+├── .gitignore  
+├── package.json  
+└── README.md  

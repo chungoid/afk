@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IntentInput",
+  "type": "object",
+  "properties": {
+    "requirement": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The raw requirement text to be analyzed for intent"
+    }
+  },
+  "required": ["requirement"],
+  "additionalProperties": false
+}

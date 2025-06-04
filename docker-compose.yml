@@ -1,0 +1,151 @@
+version: '3.8'
+services:
+  message-broker:
+    image: rabbitmq:3.9-management
+    container_name: mcp-use
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+  git-server:
+    image: gitea/gitea:latest
+    container_name: git-server
+    environment:
+      USER_UID: 1000
+      USER_GID: 1000
+    ports:
+      - "3000:3000"
+      - "22:22"
+    volumes:
+      - git-data:/data
+
+  weaviate:
+    image: semitechnologies/weaviate:1.16.3
+    container_name: weaviate
+    ports:
+      - "8080:8080"
+    environment:
+      - QUERY_DEFAULTS_LIMIT=25
+      - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
+      - PERSISTENCE_DATA_PATH=/var/lib/weaviate
+    volumes:
+      - weaviate-data:/var/lib/weaviate
+
+  analysis-agent:
+    build:
+      context: ./services/analysis-agent
+      dockerfile: Dockerfile
+    container_name: analysis-agent
+    depends_on:
+      - message-broker
+      - weaviate
+    environment:
+      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      VECTORSTORE_URL: http://weaviate:8080
+      LOG_LEVEL: INFO
+    ports:
+      - "8001:8000"
+
+  planning-agent:
+    build:
+      context: ./services/planning-agent
+      dockerfile: Dockerfile
+    container_name: planning-agent
+    depends_on:
+      - message-broker
+    environment:
+      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      LOG_LEVEL: INFO
+    ports:
+      - "8003:8000"
+
+  blueprint-agent:
+    build:
+      context: ./services/blueprint-agent
+      dockerfile: Dockerfile
+    container_name: blueprint-agent
+    depends_on:
+      - message-broker
+    environment:
+      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      LOG_LEVEL: INFO
+    ports:
+      - "8004:8000"
+
+  code-agent:
+    build:
+      context: ./services/code-agent
+      dockerfile: Dockerfile
+    container_name: code-agent
+    depends_on:
+      - message-broker
+      - git-server
+    environment:
+      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      GIT_URL: http://git-server:3000
+      LOG_LEVEL: INFO
+    ports:
+      - "8005:8000"
+
+  test-agent:
+    build:
+      context: ./services/test-agent
+      dockerfile: Dockerfile
+    container_name: test-agent
+    depends_on:
+      - message-broker
+      - code-agent
+    environment:
+      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      LOG_LEVEL: INFO
+    ports:
+      - "8006:8000"
+
+  orchestrator-agent:
+    build:
+      context: ./services/orchestrator-agent
+      dockerfile: Dockerfile
+    container_name: orchestrator-agent
+    depends_on:
+      - message-broker
+    environment:
+      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      DASHBOARD_WS_URL: ws://orchestrator-agent:8000/ws
+      LOG_LEVEL: INFO
+    ports:
+      - "8002:8000"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3001:3000"
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.21
+    container_name: jaeger
+    ports:
+      - "6831:6831/udp"
+      - "16686:16686"
+
+volumes:
+  rabbitmq-data:
+  git-data:
+  weaviate-data:

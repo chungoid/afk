@@ -1,0 +1,35 @@
+{
+  "env": "production",
+  "server": {
+    "port": 8080
+  },
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-4",
+    "temperature": 0.7,
+    "maxTokens": 1500,
+    "apiKey": {
+      "env": "OPENAI_API_KEY"
+    }
+  },
+  "pinecone": {
+    "apiKey": {
+      "env": "PINECONE_API_KEY"
+    },
+    "environment": {
+      "env": "PINECONE_ENVIRONMENT"
+    },
+    "indexName": {
+      "env": "PINECONE_INDEX_NAME"
+    }
+  },
+  "mcp": {
+    "brokerUrl": {
+      "env": "MCP_BROKER_URL"
+    },
+    "topic": "tasks.analysis"
+  },
+  "logging": {
+    "level": "info"
+  }
+}

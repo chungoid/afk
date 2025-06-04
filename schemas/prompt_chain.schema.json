@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Prompt Chain Configuration",
+  "description": "Schema for configuring multi-step LLM prompt chains",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Semantic version of the prompt chain configuration",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "chain_name": {
+      "type": "string",
+      "description": "Unique identifier for this prompt chain"
+    },
+    "steps": {
+      "type": "array",
+      "description": "Ordered list of prompt steps",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "step_name": {
+            "type": "string",
+            "description": "Logical name for this step"
+          },
+          "template_path": {
+            "type": "string",
+            "description": "Relative path to the prompt template file"
+          },
+          "input": {
+            "type": "object",
+            "description": "Mapping of template variables to source data keys",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "output_key": {
+            "type": "string",
+            "description": "Key under which this step's output will be stored"
+          },
+          "llm_config": {
+            "type": "object",
+            "description": "Optional LLM parameters",
+            "properties": {
+              "model": {
+                "type": "string",
+                "description": "Model identifier"
+              },
+              "temperature": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2,
+                "description": "Sampling temperature"
+              },
+              "max_tokens": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Maximum number of tokens to generate"
+              }
+            },
+            "required": ["model"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["step_name", "template_path", "input", "output_key"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["version", "chain_name", "steps"],
+  "additionalProperties": false
+}

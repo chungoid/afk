@@ -1,0 +1,494 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: multi-agent-pipeline
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: messaging-config
+  namespace: multi-agent-pipeline
+data:
+  BROKER_URL: "mcp://mcp-use:9092"
+  SWARMS_CONFIG: "/etc/swarms/config.json"
+  VECTORSTORE_URL: "https://pinecone.endpoint"
+  STORAGE_BUCKET: "artifact-store"
+  RAG_INDEX_DB: "rag-feedback-db"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openai-credentials
+  namespace: multi-agent-pipeline
+stringData:
+  OPENAI_API_KEY: "<YOUR_OPENAI_API_KEY>"
+  AZURE_OPENAI_ENDPOINT: "<YOUR_AZURE_OPENAI_ENDPOINT>"
+  AZURE_OPENAI_KEY: "<YOUR_AZURE_OPENAI_KEY>"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agent-sa
+  namespace: multi-agent-pipeline
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analysis-agent
+  namespace: multi-agent-pipeline
+  labels:
+    app: analysis-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: analysis-agent
+  template:
+    metadata:
+      labels:
+        app: analysis-agent
+    spec:
+      serviceAccountName: agent-sa
+      containers:
+        - name: analysis-agent
+          image: registry.example.com/analysis-agent:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: messaging-config
+            - secretRef:
+                name: openai-credentials
+          env:
+            - name: TOPIC_PUBLISH
+              value: tasks.analysis
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analysis-agent-svc
+  namespace: multi-agent-pipeline
+  labels:
+    app: analysis-agent
+spec:
+  selector:
+    app: analysis-agent
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: analysis-agent-hpa
+  namespace: multi-agent-pipeline
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: analysis-agent
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: planning-agent
+  namespace: multi-agent-pipeline
+  labels:
+    app: planning-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: planning-agent
+  template:
+    metadata:
+      labels:
+        app: planning-agent
+    spec:
+      serviceAccountName: agent-sa
+      containers:
+        - name: planning-agent
+          image: registry.example.com/planning-agent:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: messaging-config
+            - secretRef:
+                name: openai-credentials
+          env:
+            - name: SUBSCRIBE_TOPIC
+              value: tasks.analysis
+            - name: PUBLISH_TOPIC
+              value: tasks.planning
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blueprint-agent
+  namespace: multi-agent-pipeline
+  labels:
+    app: blueprint-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: blueprint-agent
+  template:
+    metadata:
+      labels:
+        app: blueprint-agent
+    spec:
+      serviceAccountName: agent-sa
+      containers:
+        - name: blueprint-agent
+          image: registry.example.com/blueprint-agent:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: messaging-config
+            - secretRef:
+                name: openai-credentials
+          env:
+            - name: SUBSCRIBE_TOPIC
+              value: tasks.planning
+            - name: PUBLISH_TOPIC
+              value: tasks.blueprint
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: code-agent
+  namespace: multi-agent-pipeline
+  labels:
+    app: code-agent
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: code-agent
+  template:
+    metadata:
+      labels:
+        app: code-agent
+    spec:
+      serviceAccountName: agent-sa
+      containers:
+        - name: code-agent
+          image: registry.example.com/code-agent:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: messaging-config
+            - secretRef:
+                name: openai-credentials
+          env:
+            - name: SUBSCRIBE_TOPIC
+              value: tasks.blueprint
+            - name: PUBLISH_TOPIC
+              value: tasks.coding
+            - name: GIT_REPO_URL
+              value: "https://git.example.com/repo.git"
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-agent
+  namespace: multi-agent-pipeline
+  labels:
+    app: test-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: test-agent
+  template:
+    metadata:
+      labels:
+        app: test-agent
+    spec:
+      serviceAccountName: agent-sa
+      containers:
+        - name: test-agent
+          image: registry.example.com/test-agent:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: messaging-config
+            - secretRef:
+                name: openai-credentials
+          env:
+            - name: SUBSCRIBE_TOPIC
+              value: tasks.coding
+            - name: PUBLISH_TOPIC
+              value: tasks.testing
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator-agent
+  namespace: multi-agent-pipeline
+  labels:
+    app: orchestrator-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orchestrator-agent
+  template:
+    metadata:
+      labels:
+        app: orchestrator-agent
+    spec:
+      serviceAccountName: agent-sa
+      containers:
+        - name: orchestrator-agent
+          image: registry.example.com/orchestrator-agent:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9000
+            - name: websocket
+              containerPort: 9001
+          envFrom:
+            - configMapRef:
+                name: messaging-config
+            - secretRef:
+                name: openai-credentials
+          env:
+            - name: SUBSCRIBE_TOPICS
+              value: "tasks.analysis,tasks.planning,tasks.blueprint,tasks.coding,tasks.testing"
+            - name: ORCHESTRATION_EVENTS_TOPIC
+              value: orchestration.events
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 9000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orchestrator-agent-svc
+  namespace: multi-agent-pipeline
+  labels:
+    app: orchestrator-agent
+spec:
+  selector:
+    app: orchestrator-agent
+  ports:
+    - protocol: TCP
+      port: 9000
+      targetPort: 9000
+    - protocol: TCP
+      port: 9001
+      targetPort: 9001
+---
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: orchestrator-agent-hpa
+  namespace: multi-agent-pipeline
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: orchestrator-agent
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-pdb
+  namespace: multi-agent-pipeline
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app in (analysis-agent, planning-agent, blueprint-agent, code-agent, test-agent)
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-network-policy
+  namespace: multi-agent-pipeline
+spec:
+  podSelector:
+    matchLabels:
+      app: analysis-agent
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 9092
+        - protocol: TCP
+          port: 443
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: agent-role
+  namespace: multi-agent-pipeline
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints", "configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agent-rolebinding
+  namespace: multi-agent-pipeline
+subjects:
+  - kind: ServiceAccount
+    name: agent-sa
+    namespace: multi-agent-pipeline
+roleRef:
+  kind: Role
+  name: agent-role
+  apiGroup: rbac.authorization.k8s.io

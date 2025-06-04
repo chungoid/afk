@@ -1,0 +1,155 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator-agent
+  namespace: orchestrator
+  labels:
+    app: orchestrator-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: orchestrator-agent
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: orchestrator-agent
+      annotations:
+        sidecar.istio.io/inject: "true"
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      serviceAccountName: orchestrator-agent-sa
+      containers:
+        - name: orchestrator-agent
+          image: myregistry/orchestrator-agent:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 8000
+          env:
+            - name: MCP_USE_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: messaging-secrets
+                  key: mcpUseBroker
+            - name: SWARMS_DISCOVERY_URL
+              value: swarms-service.orchestrator.svc.cluster.local:9000
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: openaiApiKey
+            - name: VECTORSTORE_ENDPOINT
+              value: pinecone.orchestrator.svc.cluster.local
+            - name: LOG_LEVEL
+              value: INFO
+            - name: DASHBOARD_PORT
+              value: "8080"
+            - name: METRICS_PORT
+              value: "8000"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/orchestrator/config
+            - name: tls-certs
+              mountPath: /etc/ssl/certs
+              readOnly: true
+      volumes:
+        - name: config-volume
+          configMap:
+            name: orchestrator-config
+        - name: tls-certs
+          secret:
+            secretName: tls-secrets
+            items:
+              - key: ca.crt
+                path: ca.crt
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orchestrator-agent
+  namespace: orchestrator
+  labels:
+    app: orchestrator-agent
+spec:
+  selector:
+    app: orchestrator-agent
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+    - name: metrics
+      protocol: TCP
+      port: 9090
+      targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: orchestrator-agent-hpa
+  namespace: orchestrator
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: orchestrator-agent
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: orchestrator-agent-monitor
+  namespace: orchestrator
+  labels:
+    app: orchestrator-agent
+spec:
+  selector:
+    matchLabels:
+      app: orchestrator-agent
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+  namespaceSelector:
+    matchNames:
+      - orchestrator

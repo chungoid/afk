@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Requirement Decomposition Schema",
+  "description": "Schema for the output of the requirement decomposition step",
+  "type": "object",
+  "properties": {
+    "requirement": {
+      "type": "string",
+      "description": "The original requirement to be decomposed"
+    },
+    "sub_requirements": {
+      "type": "array",
+      "description": "List of decomposed sub-requirements",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the sub-requirement",
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed description of the sub-requirement"
+          },
+          "dependencies": {
+            "type": "array",
+            "description": "List of sub-requirement IDs this one depends on",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": ["id", "description"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["requirement", "sub_requirements"],
+  "additionalProperties": false
+}

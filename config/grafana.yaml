@@ -1,0 +1,81 @@
+server:
+  root_url: http://localhost:3000
+  http_port: 3000
+  serve_from_sub_path: false
+  enable_gzip: true
+
+database:
+  type: sqlite3
+  path: grafana.db
+  log_level: warn
+
+security:
+  admin_user: admin
+  admin_password: admin
+  allow_embedding: true
+  disable_gravatar: false
+
+auth:
+  disable_login_form: false
+  disable_signout_menu: false
+
+log:
+  mode: console
+  level: info
+
+metrics:
+  enabled: true
+  interval_seconds: 10
+
+alerting:
+  enabled: true
+  execute_alerts: true
+  evaluation_interval: 30s
+  notification_providers:
+    - uid: slack
+      name: Slack
+      type: slack
+      is_default: true
+      disable_resolve_message: false
+      send_reminder: false
+      settings:
+        url: ${SLACK_WEBHOOK_URL}
+    - uid: email
+      name: Email
+      type: smtp
+      is_default: false
+      send_reminder: true
+      settings:
+        host: smtp.gmail.com:587
+        user: ${SMTP_USER}
+        password: ${SMTP_PASSWORD}
+        from_address: grafana@example.com
+
+paths:
+  provisioning: /etc/grafana/provisioning
+  data: /var/lib/grafana/data
+  logs: /var/log/grafana
+  plugins: /var/lib/grafana/plugins
+  dashboards: /var/lib/grafana/dashboards
+
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: "POST"
+
+providers:
+  - name: Multi-Agent Pipeline Dashboards
+    orgId: 1
+    folder: "Multi-Agent Pipeline"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards  
