@@ -19,12 +19,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 import uvicorn
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+# Removed prometheus imports for now
 
 # Import the existing messaging infrastructure
 import sys
 sys.path.append('/app')
-from src.common.messaging import create_messaging_client, MessagingClient
+from src.common.messaging_simple import create_messaging_client, MessagingClient
 from src.common.config import Settings
 
 # Logging setup
@@ -34,11 +34,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger("api-gateway")
 
-# Prometheus metrics
-REQUESTS_TOTAL = Counter('gateway_requests_total', 'Total API requests', ['endpoint', 'method', 'status'])
-REQUEST_DURATION = Histogram('gateway_request_duration_seconds', 'Request processing time')
-ACTIVE_PIPELINES = Gauge('gateway_active_pipelines', 'Number of active pipelines initiated')
-PIPELINE_SUBMISSIONS = Counter('gateway_pipeline_submissions_total', 'Total pipeline submissions', ['status'])
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
+REQUESTS_TOTAL = DummyMetric()
+REQUEST_DURATION = DummyMetric()
+ACTIVE_PIPELINES = DummyMetric()
+PIPELINE_SUBMISSIONS = DummyMetric()
 
 # Configuration
 PUBLISH_TOPIC = os.getenv("PUBLISH_TOPIC", "tasks.analysis")
@@ -52,7 +61,7 @@ class ProjectRequest(BaseModel):
     description: str = Field(..., min_length=10, max_length=5000)
     requirements: List[str] = Field(default_factory=list, max_items=50)
     constraints: List[str] = Field(default_factory=list, max_items=20)
-    priority: str = Field(default="medium", regex="^(low|medium|high|urgent)$")
+    priority: str = Field(default="medium", pattern="^(low|medium|high|urgent)$")
     deadline: Optional[str] = None
     technology_preferences: List[str] = Field(default_factory=list, max_items=10)
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -295,8 +304,8 @@ async def readiness():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint"""
-    from fastapi.responses import Response
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return {"status": "metrics disabled for now"}
+    return {"status": "metrics disabled for now"}
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard():

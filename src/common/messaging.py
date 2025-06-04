@@ -7,7 +7,6 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, Coroutine, Optional, List
 
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer, ConsumerRecord
-import aioredis
 
 logger = logging.getLogger("messaging")
 logger.setLevel(logging.INFO)

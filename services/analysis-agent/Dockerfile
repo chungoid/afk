@@ -7,11 +7,11 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # Copy source code first (for dependency resolution)
-COPY ../../src ./src
+COPY src ./src
 
 # Copy service files
-COPY requirements.txt .
-COPY main.py .
+COPY services/analysis-agent/requirements.txt .
+COPY services/analysis-agent/main.py .
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt

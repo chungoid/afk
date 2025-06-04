@@ -38,8 +38,8 @@ services:
 
   analysis-agent:
     build:
-      context: ./services/analysis-agent
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/analysis-agent/Dockerfile
     container_name: analysis-agent
     depends_on:
       - message-broker
@@ -53,8 +53,8 @@ services:
 
   planning-agent:
     build:
-      context: ./services/planning-agent
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/planning-agent/Dockerfile
     container_name: planning-agent
     depends_on:
       - message-broker
@@ -66,8 +66,8 @@ services:
 
   blueprint-agent:
     build:
-      context: ./services/blueprint-agent
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/blueprint-agent/Dockerfile
     container_name: blueprint-agent
     depends_on:
       - message-broker
@@ -79,8 +79,8 @@ services:
 
   code-agent:
     build:
-      context: ./services/code-agent
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/code-agent/Dockerfile
     container_name: code-agent
     depends_on:
       - message-broker
@@ -94,8 +94,8 @@ services:
 
   test-agent:
     build:
-      context: ./services/test-agent
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/test-agent/Dockerfile
     container_name: test-agent
     depends_on:
       - message-broker
@@ -108,8 +108,8 @@ services:
 
   orchestrator-agent:
     build:
-      context: ./services/orchestrator-agent
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/orchestrator-agent/Dockerfile
     container_name: orchestrator-agent
     depends_on:
       - message-broker
@@ -122,8 +122,8 @@ services:
 
   api-gateway:
     build:
-      context: ./services/api-gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/api-gateway/Dockerfile
     container_name: api-gateway
     depends_on:
       - message-broker

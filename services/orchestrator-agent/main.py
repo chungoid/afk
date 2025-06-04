@@ -6,10 +6,65 @@ Publishes to: orchestration.events
 """
 
 import asyncio
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 import os
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 import json
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 import logging
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 import time
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 from typing import Dict, List, Any, Optional, Set
 from contextlib import asynccontextmanager
 from collections import defaultdict
@@ -19,12 +74,34 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 import uvicorn
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
+# Removed prometheus imports for now
 
 # Import the existing messaging infrastructure
 import sys
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 sys.path.append('/app')
-from src.common.messaging import create_messaging_client, MessagingClient
+from src.common.messaging_simple import create_messaging_client, MessagingClient
 from src.common.config import Settings
 
 # Logging setup
@@ -35,12 +112,12 @@ logging.basicConfig(
 logger = logging.getLogger("orchestrator-agent")
 
 # Prometheus metrics
-PIPELINE_MESSAGES_RECEIVED = Counter('orchestrator_pipeline_messages_total', 'Total pipeline messages received', ['stage', 'status'])
-PIPELINE_STAGES_COMPLETED = Counter('orchestrator_stages_completed_total', 'Total pipeline stages completed', ['stage'])
-PIPELINE_DURATION = Histogram('orchestrator_pipeline_duration_seconds', 'End-to-end pipeline duration')
-ACTIVE_PIPELINES = Gauge('orchestrator_active_pipelines', 'Number of active pipelines being orchestrated')
-AGENT_HEALTH_STATUS = Gauge('orchestrator_agent_health', 'Agent health status', ['agent'])
-ORCHESTRATOR_ERRORS = Counter('orchestrator_errors_total', 'Total orchestrator errors', ['error_type'])
+PIPELINE_MESSAGES_RECEIVED = DummyMetric()
+PIPELINE_STAGES_COMPLETED = DummyMetric()
+PIPELINE_DURATION = DummyMetric()
+ACTIVE_PIPELINES = DummyMetric()
+AGENT_HEALTH_STATUS = DummyMetric()
+ORCHESTRATOR_ERRORS = DummyMetric()
 
 # Configuration
 SUBSCRIBE_TOPICS = os.getenv("SUBSCRIBE_TOPICS", "tasks.analysis,tasks.planning,tasks.blueprint,tasks.coding,tasks.testing").split(",")
@@ -471,8 +548,8 @@ async def readiness():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint"""
-    from fastapi.responses import Response
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return {"status": "metrics disabled for now"}
+    return {"status": "metrics disabled for now"}
 
 @app.get("/status")
 async def status():
@@ -523,7 +600,7 @@ async def get_pipeline(pipeline_id: str):
         "messages": [msg.dict() for msg in related_messages]
     }
 
-@app.get("/dashboard", response_class=HTMLResponse)
+    return {"status": "metrics disabled for now"}
 async def dashboard():
     """Simple HTML dashboard"""
     html_content = """
@@ -589,7 +666,7 @@ async def dashboard():
     </body>
     </html>
     """
-    return HTMLResponse(content=html_content)
+    return {"status": "metrics disabled for now"}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

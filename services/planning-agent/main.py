@@ -6,22 +6,99 @@ Publishes to: tasks.planning
 """
 
 import asyncio
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 import os
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 import json
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 import logging
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 import time
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 from typing import Dict, List, Any, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import uvicorn
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
+# Removed prometheus imports for now
 
 # Import the existing messaging infrastructure
 import sys
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 sys.path.append('/app')
-from src.common.messaging import create_messaging_client, MessagingClient
+from src.common.messaging_simple import create_messaging_client, MessagingClient
 from src.common.config import Settings
 
 # Logging setup
@@ -32,11 +109,11 @@ logging.basicConfig(
 logger = logging.getLogger("planning-agent")
 
 # Prometheus metrics
-MESSAGES_RECEIVED = Counter('planning_messages_received_total', 'Total messages received from analysis topic')
-MESSAGES_PUBLISHED = Counter('planning_messages_published_total', 'Total messages published to planning topic')
-PLANNING_DURATION = Histogram('planning_processing_duration_seconds', 'Time spent planning tasks')
-ACTIVE_PLANS = Gauge('planning_active_plans', 'Number of plans currently being processed')
-PLANNING_ERRORS = Counter('planning_errors_total', 'Total planning processing errors')
+MESSAGES_RECEIVED = DummyMetric()
+MESSAGES_PUBLISHED = DummyMetric()
+PLANNING_DURATION = DummyMetric()
+ACTIVE_PLANS = DummyMetric()
+PLANNING_ERRORS = DummyMetric()
 
 # Configuration
 SUBSCRIBE_TOPIC = os.getenv("SUBSCRIBE_TOPIC", "tasks.analysis")
@@ -349,8 +426,8 @@ async def readiness():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint"""
-    from fastapi.responses import Response
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return {"status": "metrics disabled for now"}
+    return {"status": "metrics disabled for now"}
 
 @app.get("/status")
 async def status():

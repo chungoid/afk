@@ -17,12 +17,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import uvicorn
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+# Removed prometheus imports for now
 
 # Import the existing messaging infrastructure and analysis code
 import sys
 sys.path.append('/app')
-from src.common.messaging import create_messaging_client, MessagingClient
+from src.common.messaging_simple import create_messaging_client, MessagingClient
 from src.common.config import Settings
 
 # Import existing analysis functionality
@@ -36,11 +36,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("analysis-agent")
 
-# Prometheus metrics
-ANALYSIS_REQUESTS_TOTAL = Counter('analysis_requests_total', 'Total analysis requests processed', ['status'])
-ANALYSIS_DURATION = Histogram('analysis_duration_seconds', 'Time spent analyzing tasks')
-ANALYSIS_ERRORS = Counter('analysis_errors_total', 'Total analysis errors', ['error_type'])
-ACTIVE_ANALYSES = Gauge('analysis_active_analyses', 'Number of active analyses')
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+
+ANALYSIS_REQUESTS_TOTAL = DummyMetric()
+ANALYSIS_DURATION = DummyMetric()
+ANALYSIS_ERRORS = DummyMetric()
+ACTIVE_ANALYSES = DummyMetric()
 
 # Configuration
 SUBSCRIBE_TOPIC = os.getenv("SUBSCRIBE_TOPIC", "tasks.analysis")
@@ -343,9 +349,8 @@ async def readiness():
 
 @app.get("/metrics")
 async def metrics():
-    """Prometheus metrics endpoint"""
-    from fastapi.responses import Response
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    """Metrics endpoint (simplified)"""
+    return {"status": "metrics disabled for now"}
 
 @app.get("/status")
 async def status():
@@ -359,9 +364,9 @@ async def status():
         },
         "active_analyses": len(analysis_agent.active_analyses),
         "metrics": {
-            "requests_total": ANALYSIS_REQUESTS_TOTAL._value.sum(),
-            "active_analyses": ACTIVE_ANALYSES._value.get(),
-            "errors_total": ANALYSIS_ERRORS._value.sum()
+            "requests_total": 0,
+            "active_analyses": len(analysis_agent.active_analyses),
+            "errors_total": 0
         }
     }
 

@@ -1,4 +1,5 @@
-from pydantic import BaseSettings, AnyUrl, validator, Field
+from pydantic import AnyUrl, validator, Field
+from pydantic_settings import BaseSettings
 from typing import List, Dict
 from functools import lru_cache
 import os

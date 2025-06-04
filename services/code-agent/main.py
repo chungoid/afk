@@ -6,22 +6,99 @@ Publishes to: tasks.coding
 """
 
 import asyncio
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 import os
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 import json
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 import logging
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 import time
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 from typing import Dict, List, Any, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import uvicorn
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
+# Removed prometheus imports for now
 
 # Import the existing messaging infrastructure
 import sys
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 sys.path.append('/app')
-from src.common.messaging import create_messaging_client, MessagingClient
+from src.common.messaging_simple import create_messaging_client, MessagingClient
 from src.common.config import Settings
 
 # Logging setup
@@ -32,11 +109,11 @@ logging.basicConfig(
 logger = logging.getLogger("code-agent")
 
 # Prometheus metrics
-MESSAGES_RECEIVED = Counter('code_messages_received_total', 'Total messages received from blueprint topic')
-MESSAGES_PUBLISHED = Counter('code_messages_published_total', 'Total messages published to coding topic')
-CODE_GENERATION_DURATION = Histogram('code_generation_duration_seconds', 'Time spent generating code')
-ACTIVE_CODE_TASKS = Gauge('code_active_tasks', 'Number of code generation tasks currently being processed')
-CODE_ERRORS = Counter('code_errors_total', 'Total code generation errors')
+MESSAGES_RECEIVED = DummyMetric()
+MESSAGES_PUBLISHED = DummyMetric()
+CODE_GENERATION_DURATION = DummyMetric()
+ACTIVE_CODE_TASKS = DummyMetric()
+CODE_ERRORS = DummyMetric()
 
 # Configuration
 SUBSCRIBE_TOPIC = os.getenv("SUBSCRIBE_TOPIC", "tasks.blueprint")
@@ -262,6 +339,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
+
 from .database import init_db, close_db
 from .api.routes import router
 
@@ -321,6 +409,17 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 
 Base = declarative_base()
 
@@ -421,6 +520,17 @@ Generated by Code Agent
 """
 
 import os
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -493,6 +603,17 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         
         content = f'''import React from 'react';
 import './App.css';
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 
 function App() {{
   return (
@@ -586,6 +707,17 @@ Create Date: 2024-01-01 00:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers
@@ -673,6 +805,17 @@ Generated by Code Agent
 """
 
 import pytest
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 from httpx import AsyncClient
 from fastapi.testclient import TestClient
 
@@ -698,6 +841,17 @@ Generated by Code Agent
 """
 
 import pytest
+
+# Simplified metrics (remove Prometheus for now to avoid collision)
+class DummyMetric:
+    def inc(self): pass
+    def dec(self): pass
+    def observe(self, value): pass
+    def labels(self, **kwargs): return self
+    def time(self): return self
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from src.models import Base
@@ -906,8 +1060,8 @@ async def readiness():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint"""
-    from fastapi.responses import Response
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return {"status": "metrics disabled for now"}
+    return {"status": "metrics disabled for now"}
 
 @app.get("/status")
 async def status():
