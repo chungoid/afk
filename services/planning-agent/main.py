@@ -146,7 +146,6 @@ class TaskInput(BaseModel):
 class PlanningOutput(BaseModel):
     """Planning result to publish"""
     plan_id: str
-    original_tasks: List[TaskInput]
     prioritized_tasks: List[Dict[str, Any]]
     estimated_duration: float
     risk_assessment: Dict[str, Any]
@@ -255,7 +254,6 @@ class PlanningAgent:
         
         return PlanningOutput(
             plan_id=plan_id,
-            original_tasks=tasks,
             prioritized_tasks=prioritized_tasks,
             estimated_duration=total_duration,
             risk_assessment=risk_assessment,
