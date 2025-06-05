@@ -32,27 +32,42 @@ logging.basicConfig(
 )
 logger = logging.getLogger("blueprint-agent")
 
-# Prometheus metrics
-MESSAGES_RECEIVED = Counter(
-    'blueprint_messages_received_total',
-    'Total number of messages received by blueprint agent'
-)
-MESSAGES_PUBLISHED = Counter(
-    'blueprint_messages_published_total',
-    'Total number of messages published by blueprint agent'
-)
-BLUEPRINT_DURATION = Histogram(
-    'blueprint_duration_seconds',
-    'Time spent on blueprint generation'
-)
-ACTIVE_BLUEPRINTS = Gauge(
-    'active_blueprints',
-    'Number of currently active blueprint generations'
-)
-BLUEPRINT_ERRORS = Counter(
-    'blueprint_errors_total',
-    'Total number of blueprint generation errors'
-)
+# Prometheus metrics - with unique names to avoid conflicts
+try:
+    MESSAGES_RECEIVED = Counter(
+        'blueprint_agent_messages_received_total',
+        'Total number of messages received by blueprint agent'
+    )
+    MESSAGES_PUBLISHED = Counter(
+        'blueprint_agent_messages_published_total',
+        'Total number of messages published by blueprint agent'
+    )
+    BLUEPRINT_DURATION = Histogram(
+        'blueprint_agent_duration_seconds',
+        'Time spent on blueprint generation'
+    )
+    ACTIVE_BLUEPRINTS = Gauge(
+        'blueprint_agent_active_blueprints',
+        'Number of currently active blueprint generations'
+    )
+    BLUEPRINT_ERRORS = Counter(
+        'blueprint_agent_errors_total',
+        'Total number of blueprint generation errors'
+    )
+except Exception as e:
+    logger.warning(f"Error initializing metrics, using dummy metrics: {e}")
+    # Fallback to avoid startup issues
+    class DummyMetric:
+        def inc(self): pass
+        def dec(self): pass
+        def observe(self, value): pass
+        def labels(self, **kwargs): return self
+    
+    MESSAGES_RECEIVED = DummyMetric()
+    MESSAGES_PUBLISHED = DummyMetric()
+    BLUEPRINT_DURATION = DummyMetric()
+    ACTIVE_BLUEPRINTS = DummyMetric()
+    BLUEPRINT_ERRORS = DummyMetric()
 
 # Configuration
 SUBSCRIBE_TOPIC = os.getenv("SUBSCRIBE_TOPIC", "tasks.planning")

@@ -19,83 +19,19 @@ class DummyMetric:
 
 import os
 
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import json
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import logging
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import time
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 from typing import Dict, List, Any, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import uvicorn
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 # Import the existing messaging infrastructure
 import sys
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
 
 sys.path.append('/app')
 from src.common.messaging_simple import create_messaging_client, MessagingClient
@@ -108,27 +44,42 @@ logging.basicConfig(
 )
 logger = logging.getLogger("planning-agent")
 
-# Prometheus metrics
-MESSAGES_RECEIVED = Counter(
-    'planning_messages_received_total',
-    'Total number of messages received by planning agent'
-)
-MESSAGES_PUBLISHED = Counter(
-    'planning_messages_published_total',
-    'Total number of messages published by planning agent'
-)
-PLANNING_DURATION = Histogram(
-    'planning_duration_seconds',
-    'Time spent on planning requests'
-)
-ACTIVE_PLANS = Gauge(
-    'active_plans',
-    'Number of currently active plans'
-)
-PLANNING_ERRORS = Counter(
-    'planning_errors_total',
-    'Total number of planning errors'
-)
+# Prometheus metrics - with unique names to avoid conflicts
+try:
+    MESSAGES_RECEIVED = Counter(
+        'planning_agent_messages_received_total',
+        'Total number of messages received by planning agent'
+    )
+    MESSAGES_PUBLISHED = Counter(
+        'planning_agent_messages_published_total',
+        'Total number of messages published by planning agent'
+    )
+    PLANNING_DURATION = Histogram(
+        'planning_agent_duration_seconds',
+        'Time spent on planning requests'
+    )
+    ACTIVE_PLANS = Gauge(
+        'planning_agent_active_plans',
+        'Number of currently active plans'
+    )
+    PLANNING_ERRORS = Counter(
+        'planning_agent_errors_total',
+        'Total number of planning errors'
+    )
+except Exception as e:
+    logger.warning(f"Error initializing metrics, using dummy metrics: {e}")
+    # Fallback to avoid startup issues
+    class DummyMetric:
+        def inc(self): pass
+        def dec(self): pass
+        def observe(self, value): pass
+        def labels(self, **kwargs): return self
+    
+    MESSAGES_RECEIVED = DummyMetric()
+    MESSAGES_PUBLISHED = DummyMetric()
+    PLANNING_DURATION = DummyMetric()
+    ACTIVE_PLANS = DummyMetric()
+    PLANNING_ERRORS = DummyMetric()
 
 # Configuration
 SUBSCRIBE_TOPIC = os.getenv("SUBSCRIBE_TOPIC", "tasks.planning")

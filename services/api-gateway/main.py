@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 import uvicorn
-# Removed prometheus imports for now
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 # Import the existing messaging infrastructure
 import sys
@@ -27,6 +27,7 @@ sys.path.append('/app')
 from src.common.messaging_simple import create_messaging_client, MessagingClient
 from src.common.config import Settings
 from src.common.file_handler import FileHandler, ProjectFiles, process_uploaded_zip, process_git_repo, process_file_dict
+from src.common.tracing import setup_agent_tracing, trace_operation
 from dataclasses import asdict
 
 # Logging setup
@@ -36,20 +37,43 @@ logging.basicConfig(
 )
 logger = logging.getLogger("api-gateway")
 
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
+# Prometheus metrics - with unique names to avoid conflicts
+try:
+    REQUESTS_TOTAL = Counter(
+        'api_gateway_requests_total',
+        'Total number of API requests',
+        ['method', 'endpoint', 'status']
+    )
+    REQUEST_DURATION = Histogram(
+        'api_gateway_request_duration_seconds',
+        'API request duration',
+        ['method', 'endpoint']
+    )
+    ACTIVE_PIPELINES = Gauge(
+        'api_gateway_active_pipelines',
+        'Number of currently active pipelines'
+    )
+    PIPELINE_SUBMISSIONS = Counter(
+        'api_gateway_pipeline_submissions_total',
+        'Total number of pipeline submissions',
+        ['status']
+    )
+except Exception as e:
+    logger.warning(f"Error initializing metrics, using dummy metrics: {e}")
+    # Fallback to avoid startup issues
+    class DummyMetric:
+        def inc(self): pass
+        def dec(self): pass
+        def observe(self, value): pass
+        def labels(self, **kwargs): return self
+        def time(self): return self
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
 
-REQUESTS_TOTAL = DummyMetric()
-REQUEST_DURATION = DummyMetric()
-ACTIVE_PIPELINES = DummyMetric()
-PIPELINE_SUBMISSIONS = DummyMetric()
+    REQUESTS_TOTAL = DummyMetric()
+    REQUEST_DURATION = DummyMetric()
+    ACTIVE_PIPELINES = DummyMetric()
+    PIPELINE_SUBMISSIONS = DummyMetric()
 
 # Configuration
 PUBLISH_TOPIC = os.getenv("PUBLISH_TOPIC", "tasks.analysis")
@@ -114,6 +138,9 @@ class APIGateway:
         # Track active requests
         self.active_requests: Dict[str, Dict[str, Any]] = {}
         
+        # Initialize tracing
+        self.tracer = None
+        
     async def start(self):
         """Initialize the messaging client"""
         logger.info("Starting API Gateway...")
@@ -137,23 +164,29 @@ class APIGateway:
         """Submit a project request to the analysis pipeline"""
         request_id = f"req_{uuid.uuid4().hex[:8]}_{int(time.time())}"
         
-        # Create analysis request message
-        analysis_request = {
-            "request_id": request_id,
-            "project_description": request.description,
-            "requirements": request.requirements,
-            "constraints": request.constraints,
-            "project_type": request.project_type,
-            "metadata": {
-                "project_name": request.project_name,
-                "priority": request.priority,
-                "deadline": request.deadline,
-                "technology_preferences": request.technology_preferences,
-                "submitted_at": time.time(),
-                "source": "api-gateway",
-                **request.metadata
+        # Create trace for this operation
+        with trace_operation(self.tracer, "submit_project_request", 
+                           request_id=request_id, 
+                           project_name=request.project_name,
+                           project_type=request.project_type):
+            
+            # Create analysis request message
+            analysis_request = {
+                "request_id": request_id,
+                "project_description": request.description,
+                "requirements": request.requirements,
+                "constraints": request.constraints,
+                "project_type": request.project_type,
+                "metadata": {
+                    "project_name": request.project_name,
+                    "priority": request.priority,
+                    "deadline": request.deadline,
+                    "technology_preferences": request.technology_preferences,
+                    "submitted_at": time.time(),
+                    "source": "api-gateway",
+                    **request.metadata
+                }
             }
-        }
         
         # Add project files if provided
         if project_files:
@@ -205,6 +238,8 @@ api_gateway = APIGateway()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage the gateway lifecycle"""
+    # Initialize tracing before starting
+    api_gateway.tracer = setup_agent_tracing("api-gateway", app)
     await api_gateway.start()
     yield
     await api_gateway.stop()
@@ -422,320 +457,571 @@ async def readiness():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint"""
-    return {"status": "metrics disabled for now"}
-    return {"status": "metrics disabled for now"}
+    from fastapi import Response
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard():
-    """Simple submission dashboard"""
+    """Modern professional dashboard"""
     html_content = """
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
-        <title>Multi-Agent Pipeline</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Multi-Agent Development Pipeline</title>
+        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
         <style>
-            body { 
-                font-family: Arial, sans-serif; 
-                margin: 20px; 
-                background-color: #f5f5f5;
+            .gradient-bg {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             }
-            .container { 
-                max-width: 800px; 
-                margin: 0 auto; 
-                background: white; 
-                padding: 20px; 
-                border-radius: 8px; 
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            .card-hover {
+                transition: all 0.3s ease;
             }
-            .form-group { 
-                margin-bottom: 15px; 
+            .card-hover:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
             }
-            label { 
-                display: block; 
-                margin-bottom: 5px; 
-                font-weight: bold;
+            .status-indicator {
+                animation: pulse 2s infinite;
             }
-            input, textarea, select { 
-                width: 100%; 
-                padding: 8px; 
-                border: 1px solid #ccc; 
-                border-radius: 4px;
-                box-sizing: border-box;
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.5; }
             }
-            textarea { 
-                height: 100px; 
-                resize: vertical;
+            .nav-link {
+                transition: all 0.2s ease;
             }
-            button { 
-                background-color: #007bff; 
-                color: white; 
-                padding: 10px 20px; 
-                border: none; 
-                border-radius: 4px; 
-                cursor: pointer;
-                font-size: 16px;
+            .nav-link:hover {
+                background-color: rgba(255, 255, 255, 0.1);
             }
-            button:hover { 
-                background-color: #0056b3; 
+            .grafana-dropdown:hover .dropdown-menu {
+                opacity: 1;
+                visibility: visible;
+                transform: translateY(0);
             }
-            .status { 
-                margin-top: 20px; 
-                padding: 10px; 
-                border-radius: 4px;
+            .dropdown-menu {
+                transform: translateY(-10px);
             }
-            .success { 
-                background-color: #d4edda; 
-                color: #155724; 
-                border: 1px solid #c3e6cb;
+            .form-input {
+                border: 2px solid #e5e7eb;
+                transition: border-color 0.2s ease, box-shadow 0.2s ease;
             }
-            .error { 
-                background-color: #f8d7da; 
-                color: #721c24; 
-                border: 1px solid #f5c6cb;
-            }
-            .requests-list {
-                margin-top: 30px;
-            }
-            .request-item {
-                padding: 10px;
-                margin: 10px 0;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                background-color: #f9f9f9;
+            .form-input:focus {
+                outline: none;
+                border-color: #6366f1;
+                box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
             }
         </style>
     </head>
-    <body>
-        <div class="container">
-            <h1>🚀 Multi-Agent Pipeline</h1>
-            <p>Submit your software project requirements and let our AI agents handle the development!</p>
-            
-            <form id="projectForm" enctype="multipart/form-data">
-                <div class="form-group">
-                    <label for="projectName">Project Name:</label>
-                    <input type="text" id="projectName" name="projectName" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="description">Project Description:</label>
-                    <textarea id="description" name="description" required 
-                        placeholder="Describe your project requirements in detail..."></textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label for="projectType">Project Type:</label>
-                    <select id="projectType" name="projectType" onchange="toggleProjectSource()">
-                        <option value="new" selected>New Project</option>
-                        <option value="existing_git">Existing Git Repository</option>
-                        <option value="existing_local">Local Project (Upload Files)</option>
-                    </select>
-                </div>
-                
-                <!-- Git URL section -->
-                <div id="gitSection" style="display: none;">
-                    <div class="form-group">
-                        <label for="gitUrl">Git Repository URL:</label>
-                        <input type="url" id="gitUrl" name="gitUrl" 
-                            placeholder="https://github.com/username/repository.git">
+    <body class="bg-gray-100">
+        <!-- Navigation Header -->
+        <nav class="gradient-bg shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <h1 class="text-xl font-bold text-white">Multi-Agent Development Pipeline</h1>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="gitBranch">Branch:</label>
-                        <input type="text" id="gitBranch" name="gitBranch" value="main" 
-                            placeholder="main">
+                    <div class="flex items-center space-x-4">
+                        <a href="#submit" class="nav-link text-white px-3 py-2 rounded-md text-sm font-medium">Submit Project</a>
+                        <a href="#monitoring" class="nav-link text-white px-3 py-2 rounded-md text-sm font-medium">Monitoring</a>
+                        <a href="#projects" class="nav-link text-white px-3 py-2 rounded-md text-sm font-medium">Projects</a>
+                        <div id="statusIndicator" class="flex items-center">
+                            <div class="w-3 h-3 bg-green-400 rounded-full status-indicator mr-2"></div>
+                            <span class="text-white text-sm">System Online</span>
+                        </div>
                     </div>
                 </div>
-                
-                <!-- Local file upload section -->
-                <div id="localSection" style="display: none;">
-                    <div class="form-group">
-                        <label for="projectFiles">Project Files (ZIP):</label>
-                        <input type="file" id="projectFiles" name="projectFiles" accept=".zip">
-                        <small style="color: #666; font-size: 12px;">
-                            Upload a ZIP file containing your project. Max size: 50MB<br>
-                            Files matching common ignore patterns (.git, node_modules, etc.) will be skipped.
-                        </small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="mainLanguage">Primary Language (optional):</label>
-                        <select id="mainLanguage" name="mainLanguage">
-                            <option value="">Auto-detect</option>
-                            <option value="python">Python</option>
-                            <option value="javascript">JavaScript/Node.js</option>
-                            <option value="typescript">TypeScript</option>
-                            <option value="java">Java</option>
-                            <option value="go">Go</option>
-                            <option value="rust">Rust</option>
-                            <option value="php">PHP</option>
-                            <option value="csharp">C#</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="framework">Framework (optional):</label>
-                        <input type="text" id="framework" name="framework" 
-                            placeholder="e.g., FastAPI, React, Spring Boot">
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <!-- System Status Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white overflow-hidden shadow rounded-lg card-hover">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-server text-blue-500 text-2xl"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Active Agents</dt>
+                                    <dd id="activeAgents" class="text-lg font-medium text-gray-900">6</dd>
+                                </dl>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                
-                <div class="form-group">
-                    <label for="requirements">Requirements (one per line):</label>
-                    <textarea id="requirements" name="requirements" 
-                        placeholder="User authentication&#10;REST API with CRUD operations&#10;PostgreSQL database&#10;Docker deployment"></textarea>
+
+                <div class="bg-white overflow-hidden shadow rounded-lg card-hover">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-tasks text-green-500 text-2xl"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Active Projects</dt>
+                                    <dd id="activeProjects" class="text-lg font-medium text-gray-900">0</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="form-group">
-                    <label for="priority">Priority:</label>
-                    <select id="priority" name="priority">
-                        <option value="low">Low</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="high">High</option>
-                        <option value="urgent">Urgent</option>
-                    </select>
+
+                <div class="bg-white overflow-hidden shadow rounded-lg card-hover">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-clock text-yellow-500 text-2xl"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">Queue Status</dt>
+                                    <dd id="queueStatus" class="text-lg font-medium text-gray-900">Idle</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="form-group">
-                    <label for="technologies">Technology Preferences (comma-separated):</label>
-                    <input type="text" id="technologies" name="technologies" 
-                        placeholder="Python, FastAPI, React, PostgreSQL">
+
+                <div class="bg-white overflow-hidden shadow rounded-lg card-hover">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-chart-line text-purple-500 text-2xl"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">System Health</dt>
+                                    <dd class="text-lg font-medium text-green-600">Healthy</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                
-                <button type="submit">🚀 Launch Pipeline</button>
-            </form>
-            
-            <div id="status"></div>
-            
-            <div class="requests-list">
-                <h3>Recent Submissions</h3>
-                <div id="requestsList"></div>
-                <button type="button" onclick="loadRequests()">🔄 Refresh</button>
+            </div>
+
+            <!-- Quick Access Links -->
+            <div id="monitoring" class="bg-white shadow rounded-lg mb-8">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Monitoring & Analytics</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="relative grafana-dropdown">
+                            <a href="http://localhost:3001/dashboards" target="_blank" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 card-hover">
+                                <i class="fas fa-chart-bar text-orange-500 text-xl mr-3"></i>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-900">Grafana Dashboards</p>
+                                    <p class="text-sm text-gray-500">System metrics & visualization</p>
+                                </div>
+                                <i class="fas fa-chevron-down text-gray-400 ml-auto"></i>
+                            </a>
+                            <!-- Dropdown menu -->
+                            <div class="dropdown-menu absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 opacity-0 invisible transition-all duration-200 z-10">
+                                <div class="p-2">
+                                    <a href="http://localhost:3001/d/4f8b233e-ccab-4535-82ca-7f0b139f9945/multi-agent-pipeline-monitoring" target="_blank" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">
+                                        <i class="fas fa-robot mr-2 text-blue-500"></i>Multi-Agent Pipeline Monitoring
+                                    </a>
+                                    <a href="http://localhost:3001/d/5ff87470-568f-4af5-ae74-17c2b7d647c8/rabbitmq-message-queue-monitoring" target="_blank" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">
+                                        <i class="fas fa-exchange-alt mr-2 text-purple-500"></i>RabbitMQ Message Queue Monitoring
+                                    </a>
+                                    <a href="http://localhost:3001/d/743fb8f9-423a-44c5-8f68-0ae0fb9dff42/rabbitmq-system-monitoring-simple" target="_blank" class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md">
+                                        <i class="fas fa-server mr-2 text-orange-500"></i>RabbitMQ System Monitoring
+                                        <span class="text-xs text-blue-600 ml-1">Simplified</span>
+                                    </a>
+                                    <div class="border-t border-gray-100 my-1"></div>
+                                    <a href="http://localhost:3001/dashboards" target="_blank" class="block px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-md">
+                                        <i class="fas fa-th-large mr-2"></i>All Dashboards
+                                    </a>
+                                    <a href="http://localhost:3001/?search=open" target="_blank" class="block px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-md">
+                                        <i class="fas fa-search mr-2"></i>Search Dashboards
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <a href="http://localhost:9090" target="_blank" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 card-hover">
+                            <i class="fas fa-database text-red-500 text-xl mr-3"></i>
+                            <div>
+                                <p class="text-sm font-medium text-gray-900">Prometheus Metrics</p>
+                                <p class="text-sm text-gray-500">Raw metrics & queries</p>
+                            </div>
+                        </a>
+                        <a href="http://localhost:15672" target="_blank" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 card-hover">
+                            <i class="fas fa-exchange-alt text-blue-500 text-xl mr-3"></i>
+                            <div>
+                                <p class="text-sm font-medium text-gray-900">RabbitMQ Management</p>
+                                <p class="text-sm text-gray-500">Message queue monitoring</p>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <a href="http://localhost:16686" target="_blank" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 card-hover">
+                            <i class="fas fa-route text-green-500 text-xl mr-3"></i>
+                            <div>
+                                <p class="text-sm font-medium text-gray-900">Jaeger Tracing</p>
+                                <p class="text-sm text-gray-500">Distributed request tracing</p>
+                            </div>
+                        </a>
+                        <a href="/docs" target="_blank" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 card-hover">
+                            <i class="fas fa-book text-indigo-500 text-xl mr-3"></i>
+                            <div>
+                                <p class="text-sm font-medium text-gray-900">API Documentation</p>
+                                <p class="text-sm text-gray-500">Interactive API explorer</p>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Project Submission Form -->
+            <div id="submit" class="bg-white shadow rounded-lg mb-8">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Submit New Project</h3>
+                    <form id="projectForm" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="projectName" class="block text-sm font-medium text-gray-700 mb-2">Project Name</label>
+                                <input type="text" id="projectName" name="projectName" required
+                                    placeholder="Enter your project name"
+                                    class="form-input block w-full rounded-md shadow-sm sm:text-sm">
+                            </div>
+                            <div>
+                                <label for="priority" class="block text-sm font-medium text-gray-700 mb-2">Priority</label>
+                                <select id="priority" name="priority"
+                                    class="form-input block w-full rounded-md shadow-sm sm:text-sm">
+                                    <option value="low">Low</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High</option>
+                                    <option value="urgent">Urgent</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="description" class="block text-sm font-medium text-gray-700 mb-2">Project Description</label>
+                            <textarea id="description" name="description" rows="3" required
+                                placeholder="Describe your project requirements in detail..."
+                                class="form-input block w-full rounded-md shadow-sm sm:text-sm"></textarea>
+                        </div>
+
+                        <div>
+                            <label for="requirements" class="block text-sm font-medium text-gray-700 mb-2">Requirements (one per line)</label>
+                            <textarea id="requirements" name="requirements" rows="4"
+                                placeholder="User authentication&#10;REST API with CRUD operations&#10;PostgreSQL database&#10;Docker deployment"
+                                class="form-input block w-full rounded-md shadow-sm sm:text-sm"></textarea>
+                        </div>
+
+                        <div>
+                            <label for="technologies" class="block text-sm font-medium text-gray-700 mb-2">Technology Preferences</label>
+                            <input type="text" id="technologies" name="technologies"
+                                placeholder="Python, FastAPI, React, PostgreSQL"
+                                class="form-input block w-full rounded-md shadow-sm sm:text-sm">
+                        </div>
+
+                        <div>
+                            <button type="submit"
+                                class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                <i class="fas fa-rocket mr-2"></i>
+                                Launch Development Pipeline
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Status Message -->
+                    <div id="submissionStatus" class="mt-4 hidden"></div>
+                </div>
+            </div>
+
+            <!-- Recent Projects -->
+            <div id="projects" class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">Recent Projects</h3>
+                        <button onclick="loadProjects()" class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            <i class="fas fa-sync-alt mr-2"></i>
+                            Refresh
+                        </button>
+                    </div>
+                    <div id="projectsList" class="space-y-4">
+                        <div class="text-center py-8 text-gray-500">
+                            <i class="fas fa-folder-open text-4xl mb-2"></i>
+                            <p>No projects submitted yet</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        
+
+        <!-- JavaScript -->
         <script>
-            function toggleProjectSource() {
-                const projectType = document.getElementById('projectType').value;
-                const gitSection = document.getElementById('gitSection');
-                const localSection = document.getElementById('localSection');
-                
-                gitSection.style.display = projectType === 'existing_git' ? 'block' : 'none';
-                localSection.style.display = projectType === 'existing_local' ? 'block' : 'none';
-            }
-            
+            // Form submission handler
             document.getElementById('projectForm').addEventListener('submit', async function(e) {
                 e.preventDefault();
                 
+                const statusDiv = document.getElementById('submissionStatus');
+                statusDiv.className = 'mt-4 p-4 rounded-md';
+                statusDiv.innerHTML = '<div class="flex items-center"><i class="fas fa-spinner fa-spin mr-2"></i>Submitting project...</div>';
+                statusDiv.classList.remove('hidden');
+                
                 const formData = new FormData(e.target);
-                const projectType = formData.get('projectType');
                 const requirements = formData.get('requirements').split('\\n').filter(r => r.trim());
                 const technologies = formData.get('technologies').split(',').map(t => t.trim()).filter(t => t);
                 
-                // Build project data
                 const projectData = {
                     project_name: formData.get('projectName'),
                     description: formData.get('description'),
                     requirements: requirements,
                     priority: formData.get('priority'),
                     technology_preferences: technologies,
-                    project_type: projectType
+                    project_type: 'new'
                 };
                 
-                // Add type-specific fields
-                if (projectType === 'existing_git') {
-                    projectData.git_url = formData.get('gitUrl');
-                    projectData.git_branch = formData.get('gitBranch') || 'main';
-                } else if (projectType === 'existing_local') {
-                    projectData.main_language = formData.get('mainLanguage');
-                    projectData.framework = formData.get('framework');
-                }
-                
                 try {
-                    let response;
-                    
-                    if (projectType === 'existing_local' || projectType === 'existing_git') {
-                        // Use multipart form for file uploads or git repos
-                        const submitData = new FormData();
-                        submitData.append('project_data', JSON.stringify(projectData));
-                        
-                        // Add files if uploading local project
-                        if (projectType === 'existing_local' && formData.get('projectFiles')) {
-                            submitData.append('project_files', formData.get('projectFiles'));
-                        }
-                        
-                        response = await fetch('/submit_with_files', {
-                            method: 'POST',
-                            body: submitData
-                        });
-                    } else {
-                        // Use JSON for new projects
-                        response = await fetch('/submit', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify(projectData)
-                        });
-                    }
+                    const response = await fetch('/submit', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(projectData)
+                    });
                     
                     const result = await response.json();
                     
                     if (response.ok) {
-                        document.getElementById('status').innerHTML = 
-                            '<div class="status success">' +
-                            '<h4>✅ Project Submitted Successfully!</h4>' +
-                            '<p>Request ID: ' + result.request_id + '</p>' +
-                            '<p>' + result.message + '</p>' +
-                            '<p><a href="' + result.dashboard_url + '" target="_blank">View Dashboard</a></p>' +
-                            '<p><a href="' + result.api_status_url + '" target="_blank">Check Status</a></p>' +
-                            '</div>';
+                        statusDiv.className = 'mt-4 p-4 rounded-md bg-green-50 border border-green-200';
+                        statusDiv.innerHTML = `
+                            <div class="flex">
+                                <i class="fas fa-check-circle text-green-400 mr-2 mt-0.5"></i>
+                                <div>
+                                    <h4 class="text-sm font-medium text-green-800">Project Submitted Successfully!</h4>
+                                    <div class="mt-2 text-sm text-green-700">
+                                        <p>Request ID: <span class="font-mono">${result.request_id}</span></p>
+                                        <p class="mt-1">${result.message}</p>
+                                        <div class="mt-3 space-x-2">
+                                            <a href="${result.api_status_url}" target="_blank" class="text-green-600 hover:text-green-500 underline">
+                                                <i class="fas fa-external-link-alt mr-1"></i>Check Status
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
                         e.target.reset();
-                        toggleProjectSource(); // Reset form display
-                        loadRequests();
+                        loadProjects();
+                        updateSystemStatus();
                     } else {
                         throw new Error(result.detail || 'Submission failed');
                     }
                 } catch (error) {
-                    document.getElementById('status').innerHTML = 
-                        '<div class="status error">' +
-                        '<h4>❌ Submission Failed</h4>' +
-                        '<p>' + error.message + '</p>' +
-                        '</div>';
+                    statusDiv.className = 'mt-4 p-4 rounded-md bg-red-50 border border-red-200';
+                    statusDiv.innerHTML = `
+                        <div class="flex">
+                            <i class="fas fa-exclamation-circle text-red-400 mr-2 mt-0.5"></i>
+                            <div>
+                                <h4 class="text-sm font-medium text-red-800">Submission Failed</h4>
+                                <p class="mt-1 text-sm text-red-700">${error.message}</p>
+                            </div>
+                        </div>
+                    `;
                 }
             });
-            
-            async function loadRequests() {
+
+            // Load projects list
+            async function loadProjects() {
                 try {
                     const response = await fetch('/requests');
                     const data = await response.json();
                     
-                    const requestsList = document.getElementById('requestsList');
-                    requestsList.innerHTML = '';
+                    const projectsList = document.getElementById('projectsList');
                     
                     if (data.requests.length === 0) {
-                        requestsList.innerHTML = '<p>No active requests</p>';
+                        projectsList.innerHTML = `
+                            <div class="text-center py-8 text-gray-500">
+                                <i class="fas fa-folder-open text-4xl mb-2"></i>
+                                <p>No projects submitted yet</p>
+                            </div>
+                        `;
                         return;
                     }
                     
-                    data.requests.forEach(request => {
-                        const div = document.createElement('div');
-                        div.className = 'request-item';
-                        div.innerHTML = 
-                            '<strong>' + request.project_name + '</strong> ' +
-                            '<span style="float: right">' + request.status + '</span><br>' +
-                            '<small>ID: ' + request.request_id + '</small><br>' +
-                            '<small>Created: ' + new Date(request.created_at * 1000).toLocaleString() + '</small>';
-                        requestsList.appendChild(div);
-                    });
+                    projectsList.innerHTML = data.requests.map(request => `
+                        <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-gray-900">${request.project_name}</h4>
+                                    <p class="text-sm text-gray-500 mt-1">ID: <span class="font-mono">${request.request_id}</span></p>
+                                    <p class="text-sm text-gray-500">Created: ${new Date(request.created_at * 1000).toLocaleString()}</p>
+                                </div>
+                                <div class="ml-4">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(request.status)}">
+                                        ${request.status}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    // Update active projects count
+                    document.getElementById('activeProjects').textContent = data.requests.filter(r => !['completed', 'failed'].includes(r.status)).length;
+                    
                 } catch (error) {
-                    console.error('Failed to load requests:', error);
+                    console.error('Failed to load projects:', error);
                 }
             }
-            
-            // Load requests on page load
-            loadRequests();
-            
-            // Auto-refresh every 30 seconds
-            setInterval(loadRequests, 30000);
+
+            // Get status color classes
+            function getStatusColor(status) {
+                const colors = {
+                    'submitted': 'bg-blue-100 text-blue-800',
+                    'analysis': 'bg-yellow-100 text-yellow-800',
+                    'planning': 'bg-purple-100 text-purple-800',
+                    'blueprint': 'bg-indigo-100 text-indigo-800',
+                    'coding': 'bg-orange-100 text-orange-800',
+                    'testing': 'bg-pink-100 text-pink-800',
+                    'completed': 'bg-green-100 text-green-800',
+                    'failed': 'bg-red-100 text-red-800',
+                    'cancelled': 'bg-gray-100 text-gray-800'
+                };
+                return colors[status] || 'bg-gray-100 text-gray-800';
+            }
+
+            // Update system status
+            async function updateSystemStatus() {
+                try {
+                    // Check agent health
+                    const agentHealth = await fetch('http://localhost:9090/api/v1/query?query=up{job=~".*-agent"}');
+                    const agentData = await agentHealth.json();
+                    const activeAgents = agentData.data.result.filter(r => r.value[1] === '1').length;
+                    document.getElementById('activeAgents').textContent = activeAgents;
+
+                    // Update status indicator
+                    const statusIndicator = document.getElementById('statusIndicator');
+                    if (activeAgents >= 6) {
+                        statusIndicator.innerHTML = `
+                            <div class="w-3 h-3 bg-green-400 rounded-full status-indicator mr-2"></div>
+                            <span class="text-white text-sm">System Online</span>
+                        `;
+                    } else {
+                        statusIndicator.innerHTML = `
+                            <div class="w-3 h-3 bg-yellow-400 rounded-full status-indicator mr-2"></div>
+                            <span class="text-white text-sm">Partial Service</span>
+                        `;
+                    }
+
+                } catch (error) {
+                    console.error('Failed to update system status:', error);
+                    const statusIndicator = document.getElementById('statusIndicator');
+                    statusIndicator.innerHTML = `
+                        <div class="w-3 h-3 bg-red-400 rounded-full status-indicator mr-2"></div>
+                        <span class="text-white text-sm">Status Unknown</span>
+                    `;
+                }
+            }
+
+            // Smooth scrolling for navigation links
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                });
+            });
+
+            // Load Grafana dashboard links dynamically
+            async function loadGrafanaDashboards() {
+                try {
+                    // Try to get dashboard list from Grafana API with authentication
+                    const response = await fetch('http://localhost:3001/api/search?type=dash-db', {
+                        headers: {
+                            'Authorization': 'Basic ' + btoa('admin:admin')
+                        }
+                    });
+                    const dashboards = await response.json();
+                    
+                    // Update dropdown links with actual dashboard URLs
+                    const dropdownLinks = [
+                        { text: 'Multi-Agent Pipeline Monitoring', icon: 'fas fa-robot text-blue-500' },
+                        { text: 'Pipeline Monitoring (Fixed)', icon: 'fas fa-tools text-green-500' },
+                        { text: 'RabbitMQ Message Queue', icon: 'fas fa-exchange-alt text-purple-500' },
+                        { text: 'RabbitMQ System (Simple)', icon: 'fas fa-server text-orange-500' }
+                    ];
+                    
+                    const dropdown = document.querySelector('.dropdown-menu .p-2');
+                    if (dropdown && dashboards.length > 0) {
+                        // Clear existing links except separators and static ones
+                        const staticLinks = dropdown.querySelectorAll('a[href*="dashboards"], a[href*="search"]');
+                        dropdown.innerHTML = '';
+                        
+                        // Add dashboard links
+                        dashboards.forEach(dashboard => {
+                            if (dashboard.type === 'dash-db') {
+                                const link = document.createElement('a');
+                                link.href = `http://localhost:3001${dashboard.url}`;
+                                link.target = '_blank';
+                                link.className = 'block px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md';
+                                
+                                // Clean up dashboard names and add badges
+                                let displayName = dashboard.title;
+                                let icon = 'fas fa-chart-line text-gray-500';
+                                let badge = '';
+                                
+                                if (dashboard.title.toLowerCase().includes('multi-agent') || dashboard.title.toLowerCase().includes('pipeline')) {
+                                    displayName = 'Multi-Agent Pipeline Monitoring';
+                                    icon = 'fas fa-robot text-blue-500';
+                                } else if (dashboard.title.toLowerCase().includes('rabbitmq')) {
+                                    if (dashboard.title.toLowerCase().includes('simple')) {
+                                        displayName = 'RabbitMQ System Monitoring';
+                                        icon = 'fas fa-server text-orange-500';
+                                        badge = '<span class="text-xs text-blue-600 ml-1">Simplified</span>';
+                                    } else {
+                                        displayName = 'RabbitMQ Message Queue Monitoring';
+                                        icon = 'fas fa-exchange-alt text-purple-500';
+                                    }
+                                }
+                                
+                                link.innerHTML = `<i class="${icon} mr-2"></i>${displayName} ${badge}`;
+                                dropdown.appendChild(link);
+                            }
+                        });
+                        
+                        // Add separator
+                        const separator = document.createElement('div');
+                        separator.className = 'border-t border-gray-100 my-1';
+                        dropdown.appendChild(separator);
+                        
+                        // Re-add static links
+                        staticLinks.forEach(staticLink => {
+                            dropdown.appendChild(staticLink.cloneNode(true));
+                        });
+                    }
+                } catch (error) {
+                    console.log('Could not load Grafana dashboards:', error);
+                    // Links will remain as static fallback
+                }
+            }
+
+            // Initialize page
+            document.addEventListener('DOMContentLoaded', function() {
+                loadProjects();
+                updateSystemStatus();
+                loadGrafanaDashboards();
+                
+                // Auto-refresh every 30 seconds
+                setInterval(() => {
+                    loadProjects();
+                    updateSystemStatus();
+                }, 30000);
+            });
         </script>
     </body>
     </html>

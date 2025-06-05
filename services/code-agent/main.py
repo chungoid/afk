@@ -7,95 +7,20 @@ Publishes to: tasks.coding
 
 import asyncio
 
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import os
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import json
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import logging
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import time
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 from typing import Dict, List, Any, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import uvicorn
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
-# Removed prometheus imports for now
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 # Import the existing messaging infrastructure
 import sys
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
 
 sys.path.append('/app')
 from src.common.messaging_simple import create_messaging_client, MessagingClient
@@ -109,12 +34,42 @@ logging.basicConfig(
 )
 logger = logging.getLogger("code-agent")
 
-# Prometheus metrics
-MESSAGES_RECEIVED = DummyMetric()
-MESSAGES_PUBLISHED = DummyMetric()
-CODE_GENERATION_DURATION = DummyMetric()
-ACTIVE_CODE_TASKS = DummyMetric()
-CODE_ERRORS = DummyMetric()
+# Prometheus metrics - with unique names to avoid conflicts
+try:
+    MESSAGES_RECEIVED = Counter(
+        'code_agent_messages_received_total',
+        'Total number of messages received by code agent'
+    )
+    MESSAGES_PUBLISHED = Counter(
+        'code_agent_messages_published_total',
+        'Total number of messages published by code agent'
+    )
+    CODE_GENERATION_DURATION = Histogram(
+        'code_agent_generation_duration_seconds',
+        'Time spent on code generation'
+    )
+    ACTIVE_CODE_TASKS = Gauge(
+        'code_agent_active_tasks',
+        'Number of currently active code generation tasks'
+    )
+    CODE_ERRORS = Counter(
+        'code_agent_errors_total',
+        'Total number of code generation errors'
+    )
+except Exception as e:
+    logger.warning(f"Error initializing metrics, using dummy metrics: {e}")
+    # Fallback to avoid startup issues
+    class DummyMetric:
+        def inc(self): pass
+        def dec(self): pass
+        def observe(self, value): pass
+        def labels(self, **kwargs): return self
+    
+    MESSAGES_RECEIVED = DummyMetric()
+    MESSAGES_PUBLISHED = DummyMetric()
+    CODE_GENERATION_DURATION = DummyMetric()
+    ACTIVE_CODE_TASKS = DummyMetric()
+    CODE_ERRORS = DummyMetric()
 
 # Configuration
 SUBSCRIBE_TOPIC = os.getenv("SUBSCRIBE_TOPIC", "tasks.blueprint")
@@ -1272,8 +1227,8 @@ async def readiness():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint"""
-    return {"status": "metrics disabled for now"}
-    return {"status": "metrics disabled for now"}
+    from fastapi import Response
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.get("/status")
 async def status():
@@ -1286,10 +1241,10 @@ async def status():
             "publish": PUBLISH_TOPIC
         },
         "metrics": {
-            "messages_received": MESSAGES_RECEIVED._value.get(),
-            "messages_published": MESSAGES_PUBLISHED._value.get(),
-            "active_tasks": ACTIVE_CODE_TASKS._value.get(),
-            "errors": CODE_ERRORS._value.get()
+            "messages_received": getattr(MESSAGES_RECEIVED, '_value', 0),
+            "messages_published": getattr(MESSAGES_PUBLISHED, '_value', 0),
+            "active_tasks": getattr(ACTIVE_CODE_TASKS, '_value', 0),
+            "errors": getattr(CODE_ERRORS, '_value', 0)
         }
     }
 

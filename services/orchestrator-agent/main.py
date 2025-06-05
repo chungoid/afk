@@ -19,45 +19,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 import uvicorn
-
-# Comprehensive DummyMetric class to replace Prometheus metrics
-class DummyMetricValue:
-    def __init__(self):
-        self.value = 0
-    
-    def sum(self):
-        return self.value
-    
-    def get(self):
-        return self.value
-
-class DummyMetric:
-    def __init__(self):
-        self._value = DummyMetricValue()
-        
-    def inc(self): 
-        self._value.value += 1
-        
-    def dec(self): 
-        self._value.value -= 1
-        
-    def observe(self, value): 
-        self._value.value = value
-        
-    def set(self, value):
-        self._value.value = value
-        
-    def labels(self, **kwargs): 
-        return self
-        
-    def time(self): 
-        return self
-        
-    def __enter__(self): 
-        return self
-        
-    def __exit__(self, *args): 
-        pass
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 # Import the existing messaging infrastructure
 import sys
@@ -72,13 +34,58 @@ logging.basicConfig(
 )
 logger = logging.getLogger("orchestrator-agent")
 
-# Prometheus metrics
-PIPELINE_MESSAGES_RECEIVED = DummyMetric()
-PIPELINE_STAGES_COMPLETED = DummyMetric()
-PIPELINE_DURATION = DummyMetric()
-ACTIVE_PIPELINES = DummyMetric()
-AGENT_HEALTH_STATUS = DummyMetric()
-ORCHESTRATOR_ERRORS = DummyMetric()
+# Prometheus metrics - with unique names to avoid conflicts
+try:
+    PIPELINE_MESSAGES_RECEIVED = Counter(
+        'orchestrator_agent_messages_received_total',
+        'Total number of pipeline messages received',
+        ['stage']
+    )
+    PIPELINE_STAGES_COMPLETED = Counter(
+        'orchestrator_agent_stages_completed_total',
+        'Total number of pipeline stages completed',
+        ['stage', 'status']
+    )
+    PIPELINE_DURATION = Histogram(
+        'orchestrator_agent_pipeline_duration_seconds',
+        'Time taken for complete pipeline execution'
+    )
+    ACTIVE_PIPELINES = Gauge(
+        'orchestrator_agent_active_pipelines',
+        'Number of currently active pipelines'
+    )
+    AGENT_HEALTH_STATUS = Gauge(
+        'orchestrator_agent_health_status',
+        'Health status of monitored agents',
+        ['agent_name']
+    )
+    ORCHESTRATOR_ERRORS = Counter(
+        'orchestrator_agent_errors_total',
+        'Total number of orchestrator errors'
+    )
+except Exception as e:
+    logger.warning(f"Error initializing metrics, using dummy metrics: {e}")
+    # Fallback to avoid startup issues
+    class DummyMetric:
+        def __init__(self):
+            self._value = type('obj', (object,), {'value': 0})()
+        def inc(self): 
+            self._value.value += 1
+        def dec(self): 
+            self._value.value -= 1
+        def observe(self, value): 
+            self._value.value = value
+        def set(self, value):
+            self._value.value = value
+        def labels(self, **kwargs): 
+            return self
+    
+    PIPELINE_MESSAGES_RECEIVED = DummyMetric()
+    PIPELINE_STAGES_COMPLETED = DummyMetric()
+    PIPELINE_DURATION = DummyMetric()
+    ACTIVE_PIPELINES = DummyMetric()
+    AGENT_HEALTH_STATUS = DummyMetric()
+    ORCHESTRATOR_ERRORS = DummyMetric()
 
 # Configuration
 SUBSCRIBE_TOPICS = os.getenv("SUBSCRIBE_TOPICS", "tasks.analysis,tasks.planning,tasks.blueprint,tasks.coding,tasks.testing").split(",")
@@ -514,8 +521,8 @@ async def readiness():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint"""
-    return {"status": "metrics disabled for now"}
-    return {"status": "metrics disabled for now"}
+    from fastapi import Response
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.get("/status")
 async def status():
@@ -535,10 +542,10 @@ async def status():
             "active_connections": len(orchestrator_agent.websocket_connections)
         },
         "metrics": {
-            "messages_received": PIPELINE_MESSAGES_RECEIVED._value.sum(),
-            "stages_completed": PIPELINE_STAGES_COMPLETED._value.sum(),
-            "active_pipelines": ACTIVE_PIPELINES._value.get(),
-            "errors": ORCHESTRATOR_ERRORS._value.sum()
+            "messages_received": getattr(getattr(PIPELINE_MESSAGES_RECEIVED, '_value', None), 'value', 0),
+            "stages_completed": getattr(getattr(PIPELINE_STAGES_COMPLETED, '_value', None), 'value', 0),
+            "active_pipelines": getattr(getattr(ACTIVE_PIPELINES, '_value', None), 'value', 0),
+            "errors": getattr(getattr(ORCHESTRATOR_ERRORS, '_value', None), 'value', 0)
         }
     }
 
@@ -566,7 +573,7 @@ async def get_pipeline(pipeline_id: str):
         "messages": [msg.dict() for msg in related_messages]
     }
 
-    return {"status": "metrics disabled for now"}
+@app.get("/")
 async def dashboard():
     """Simple HTML dashboard"""
     html_content = """
@@ -632,7 +639,7 @@ async def dashboard():
     </body>
     </html>
     """
-    return {"status": "metrics disabled for now"}
+    return HTMLResponse(content=html_content)
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

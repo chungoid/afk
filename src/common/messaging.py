@@ -339,11 +339,14 @@ class RabbitMQMessagingClient(MessagingClient):
             
             logger.info("RabbitMQ consumer started for topic=%s, queue=%s", topic, queue_name)
             
-            async with queue.iterator() as queue_iter:
-                async for message in queue_iter:
-                    if self._stopped.is_set():
-                        break
-                    
+            # Use get() method instead of iterator for better compatibility
+            while not self._stopped.is_set():
+                try:
+                    # Get message with timeout
+                    message = await queue.get(timeout=1.0, fail=False)
+                    if message is None:
+                        continue
+                        
                     try:
                         payload = json.loads(message.body.decode('utf-8'))
                         logger.debug("Received message on %s: %s", topic, payload)
@@ -352,6 +355,12 @@ class RabbitMQMessagingClient(MessagingClient):
                     except Exception as e:
                         logger.exception("Error handling message: %s", e)
                         await message.nack(requeue=False)
+                        
+                except asyncio.TimeoutError:
+                    continue
+                except Exception as e:
+                    logger.warning("Error getting message from queue %s: %s", queue_name, e)
+                    await asyncio.sleep(1)
             
             logger.info("RabbitMQ consumer stopped for topic=%s", topic)
 

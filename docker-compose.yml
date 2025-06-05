@@ -127,6 +127,7 @@ services:
     depends_on:
       - message-broker
       - weaviate
+      - jaeger
       - mcp-filesystem
       - mcp-git
       - mcp-memory
@@ -140,6 +141,10 @@ services:
       LOG_LEVEL: INFO
       SUBSCRIBE_TOPIC: tasks.analysis
       PUBLISH_TOPIC: tasks.planning
+      # Tracing configuration
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      TRACING_ENABLED: "true"
+      TRACING_SAMPLE_RATE: "1.0"
       # OpenAI Configuration
       OPENAI_API_KEY: sk-test-key-for-development-only
       # MCP Server URLs - Full Access
@@ -319,6 +324,7 @@ services:
     depends_on:
       - message-broker
       - orchestrator-agent
+      - jaeger
       - mcp-filesystem
       - mcp-git
       - mcp-memory
@@ -330,6 +336,10 @@ services:
       BROKER_URL: amqp://guest:guest@mcp-use:5672/
       ORCHESTRATOR_URL: http://orchestrator-agent:8000
       LOG_LEVEL: INFO
+      # Tracing configuration
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      TRACING_ENABLED: "true"
+      TRACING_SAMPLE_RATE: "1.0"
       # MCP Server URLs - Full Access
       MCP_FILESYSTEM_URL: http://mcp-filesystem:8080
       MCP_GIT_URL: http://mcp-git:8080
@@ -360,11 +370,23 @@ services:
       - "3001:3000"
 
   jaeger:
-    image: jaegertracing/all-in-one:1.21
+    image: jaegertracing/all-in-one:1.49.0
     container_name: jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      COLLECTOR_ZIPKIN_HOST_PORT: ":9411"
     ports:
-      - "6831:6831/udp"
-      - "16686:16686"
+      - "5775:5775/udp"     # accept zipkin.thrift over compact thrift protocol
+      - "6831:6831/udp"     # accept jaeger.thrift over compact thrift protocol
+      - "6832:6832/udp"     # accept jaeger.thrift over binary thrift protocol
+      - "5778:5778"         # serve configs
+      - "16686:16686"       # serve frontend
+      - "14268:14268"       # accept jaeger.thrift directly from clients
+      - "14250:14250"       # accept model.proto
+      - "14269:14269"       # admin port: health check and metrics
+      - "4317:4317"         # accept OpenTelemetry OTLP over gRPC
+      - "4318:4318"         # accept OpenTelemetry OTLP over HTTP
+      - "9411:9411"         # Zipkin compatible endpoint
 
 volumes:
   rabbitmq-data:

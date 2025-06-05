@@ -18,7 +18,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import uvicorn
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 
 # Import the existing messaging infrastructure and analysis code
 import sys
@@ -44,25 +44,44 @@ logging.basicConfig(
 )
 logger = logging.getLogger("analysis-agent")
 
-# Prometheus metrics
-ANALYSIS_REQUESTS_TOTAL = Counter(
-    'analysis_requests_total',
-    'Total number of analysis requests processed',
-    ['status']
-)
-ANALYSIS_DURATION = Histogram(
-    'analysis_duration_seconds',
-    'Time spent on analysis requests'
-)
-ANALYSIS_ERRORS = Counter(
-    'analysis_errors_total',
-    'Total number of analysis errors',
-    ['error_type']
-)
-ACTIVE_ANALYSES = Gauge(
-    'active_analyses',
-    'Number of currently active analyses'
-)
+# Clear any existing metrics that might conflict
+for collector in list(REGISTRY._collector_to_names.keys()):
+    if hasattr(collector, '_name') and any(name.startswith('analysis_') for name in REGISTRY._collector_to_names.get(collector, [])):
+        REGISTRY.unregister(collector)
+
+# Prometheus metrics - with unique names to avoid conflicts
+try:
+    ANALYSIS_REQUESTS_TOTAL = Counter(
+        'analysis_agent_requests_total',
+        'Total number of analysis requests processed',
+        ['status']
+    )
+    ANALYSIS_DURATION = Histogram(
+        'analysis_agent_duration_seconds',
+        'Time spent on analysis requests'
+    )
+    ANALYSIS_ERRORS = Counter(
+        'analysis_agent_errors_total',
+        'Total number of analysis errors',
+        ['error_type']
+    )
+    ACTIVE_ANALYSES = Gauge(
+        'analysis_agent_active_analyses',
+        'Number of currently active analyses'
+    )
+except Exception as e:
+    logger.warning(f"Error initializing metrics, using dummy metrics: {e}")
+    # Fallback to avoid startup issues
+    class DummyMetric:
+        def inc(self): pass
+        def dec(self): pass
+        def observe(self, value): pass
+        def labels(self, **kwargs): return self
+    
+    ANALYSIS_REQUESTS_TOTAL = DummyMetric()
+    ANALYSIS_DURATION = DummyMetric()
+    ANALYSIS_ERRORS = DummyMetric()
+    ACTIVE_ANALYSES = DummyMetric()
 
 # Configuration
 SUBSCRIBE_TOPIC = os.getenv("SUBSCRIBE_TOPIC", "tasks.analysis")
