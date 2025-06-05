@@ -29,10 +29,12 @@ services:
     container_name: weaviate
     ports:
       - "8080:8080"
+      - "2112:2112"
     environment:
       - QUERY_DEFAULTS_LIMIT=25
       - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
       - PERSISTENCE_DATA_PATH=/var/lib/weaviate
+      - PROMETHEUS_MONITORING_ENABLED=true
     volumes:
       - weaviate-data:/var/lib/weaviate
 
@@ -129,17 +131,25 @@ services:
       - mcp-git
       - mcp-memory
       - mcp-sequentialthinking
+      - mcp-time
+      - mcp-context7
+      - mcp-fetch
     environment:
-      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      BROKER_URL: amqp://guest:guest@mcp-use:5672/
       VECTORSTORE_URL: http://weaviate:8080
       LOG_LEVEL: INFO
       SUBSCRIBE_TOPIC: tasks.analysis
       PUBLISH_TOPIC: tasks.planning
-      # MCP Server URLs
+      # OpenAI Configuration
+      OPENAI_API_KEY: sk-test-key-for-development-only
+      # MCP Server URLs - Full Access
       MCP_FILESYSTEM_URL: http://mcp-filesystem:8080
       MCP_GIT_URL: http://mcp-git:8080
       MCP_MEMORY_URL: http://mcp-memory:8080
       MCP_SEQUENTIALTHINKING_URL: http://mcp-sequentialthinking:8080
+      MCP_TIME_URL: http://mcp-time:8080
+      MCP_CONTEXT7_URL: http://mcp-context7:8080
+      MCP_FETCH_URL: http://mcp-fetch:8080
     ports:
       - "8001:8000"
 
@@ -150,11 +160,26 @@ services:
     container_name: planning-agent
     depends_on:
       - message-broker
+      - mcp-filesystem
+      - mcp-git
+      - mcp-memory
+      - mcp-sequentialthinking
+      - mcp-time
+      - mcp-context7
+      - mcp-fetch
     environment:
-      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      BROKER_URL: amqp://guest:guest@mcp-use:5672/
       LOG_LEVEL: INFO
       SUBSCRIBE_TOPIC: tasks.planning
       PUBLISH_TOPIC: tasks.blueprint
+      # MCP Server URLs - Full Access
+      MCP_FILESYSTEM_URL: http://mcp-filesystem:8080
+      MCP_GIT_URL: http://mcp-git:8080
+      MCP_MEMORY_URL: http://mcp-memory:8080
+      MCP_SEQUENTIALTHINKING_URL: http://mcp-sequentialthinking:8080
+      MCP_TIME_URL: http://mcp-time:8080
+      MCP_CONTEXT7_URL: http://mcp-context7:8080
+      MCP_FETCH_URL: http://mcp-fetch:8080
     ports:
       - "8003:8000"
 
@@ -165,11 +190,26 @@ services:
     container_name: blueprint-agent
     depends_on:
       - message-broker
+      - mcp-filesystem
+      - mcp-git
+      - mcp-memory
+      - mcp-sequentialthinking
+      - mcp-time
+      - mcp-context7
+      - mcp-fetch
     environment:
-      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      BROKER_URL: amqp://guest:guest@mcp-use:5672/
       LOG_LEVEL: INFO
       SUBSCRIBE_TOPIC: tasks.blueprint
       PUBLISH_TOPIC: tasks.coding
+      # MCP Server URLs - Full Access
+      MCP_FILESYSTEM_URL: http://mcp-filesystem:8080
+      MCP_GIT_URL: http://mcp-git:8080
+      MCP_MEMORY_URL: http://mcp-memory:8080
+      MCP_SEQUENTIALTHINKING_URL: http://mcp-sequentialthinking:8080
+      MCP_TIME_URL: http://mcp-time:8080
+      MCP_CONTEXT7_URL: http://mcp-context7:8080
+      MCP_FETCH_URL: http://mcp-fetch:8080
     ports:
       - "8004:8000"
 
@@ -185,17 +225,23 @@ services:
       - mcp-git
       - mcp-fetch
       - mcp-memory
+      - mcp-sequentialthinking
+      - mcp-time
+      - mcp-context7
     environment:
-      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      BROKER_URL: amqp://guest:guest@mcp-use:5672/
       GIT_URL: http://git-server:3000
       LOG_LEVEL: INFO
       SUBSCRIBE_TOPIC: tasks.coding
       PUBLISH_TOPIC: tasks.testing
-      # MCP Server URLs
+      # MCP Server URLs - Full Access
       MCP_FILESYSTEM_URL: http://mcp-filesystem:8080
       MCP_GIT_URL: http://mcp-git:8080
       MCP_FETCH_URL: http://mcp-fetch:8080
       MCP_MEMORY_URL: http://mcp-memory:8080
+      MCP_SEQUENTIALTHINKING_URL: http://mcp-sequentialthinking:8080
+      MCP_TIME_URL: http://mcp-time:8080
+      MCP_CONTEXT7_URL: http://mcp-context7:8080
     ports:
       - "8005:8000"
 
@@ -208,13 +254,28 @@ services:
       - message-broker
       - code-agent
       - git-server
+      - mcp-filesystem
+      - mcp-git
+      - mcp-memory
+      - mcp-sequentialthinking
+      - mcp-time
+      - mcp-context7
+      - mcp-fetch
     environment:
-      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      BROKER_URL: amqp://guest:guest@mcp-use:5672/
       GIT_URL: http://git-server:3000
       LOG_LEVEL: INFO
       SUBSCRIBE_TOPIC: tasks.testing
       PUBLISH_TOPIC: tasks.testing
       COMPLETION_TOPIC: tasks.completion
+      # MCP Server URLs - Full Access
+      MCP_FILESYSTEM_URL: http://mcp-filesystem:8080
+      MCP_GIT_URL: http://mcp-git:8080
+      MCP_MEMORY_URL: http://mcp-memory:8080
+      MCP_SEQUENTIALTHINKING_URL: http://mcp-sequentialthinking:8080
+      MCP_TIME_URL: http://mcp-time:8080
+      MCP_CONTEXT7_URL: http://mcp-context7:8080
+      MCP_FETCH_URL: http://mcp-fetch:8080
     ports:
       - "8006:8000"
     volumes:
@@ -227,11 +288,26 @@ services:
     container_name: orchestrator-agent
     depends_on:
       - message-broker
+      - mcp-filesystem
+      - mcp-git
+      - mcp-memory
+      - mcp-sequentialthinking
+      - mcp-time
+      - mcp-context7
+      - mcp-fetch
     environment:
-      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      BROKER_URL: amqp://guest:guest@mcp-use:5672/
       DASHBOARD_WS_URL: ws://orchestrator-agent:8000/ws
       LOG_LEVEL: INFO
       SUBSCRIBE_TOPICS: tasks.analysis,tasks.planning,tasks.blueprint,tasks.coding,tasks.testing,tasks.completion
+      # MCP Server URLs - Full Access
+      MCP_FILESYSTEM_URL: http://mcp-filesystem:8080
+      MCP_GIT_URL: http://mcp-git:8080
+      MCP_MEMORY_URL: http://mcp-memory:8080
+      MCP_SEQUENTIALTHINKING_URL: http://mcp-sequentialthinking:8080
+      MCP_TIME_URL: http://mcp-time:8080
+      MCP_CONTEXT7_URL: http://mcp-context7:8080
+      MCP_FETCH_URL: http://mcp-fetch:8080
     ports:
       - "8002:8000"
 
@@ -243,10 +319,25 @@ services:
     depends_on:
       - message-broker
       - orchestrator-agent
+      - mcp-filesystem
+      - mcp-git
+      - mcp-memory
+      - mcp-sequentialthinking
+      - mcp-time
+      - mcp-context7
+      - mcp-fetch
     environment:
-      BROKER_URL: amqp://guest:guest@message-broker:5672/
+      BROKER_URL: amqp://guest:guest@mcp-use:5672/
       ORCHESTRATOR_URL: http://orchestrator-agent:8000
       LOG_LEVEL: INFO
+      # MCP Server URLs - Full Access
+      MCP_FILESYSTEM_URL: http://mcp-filesystem:8080
+      MCP_GIT_URL: http://mcp-git:8080
+      MCP_MEMORY_URL: http://mcp-memory:8080
+      MCP_SEQUENTIALTHINKING_URL: http://mcp-sequentialthinking:8080
+      MCP_TIME_URL: http://mcp-time:8080
+      MCP_CONTEXT7_URL: http://mcp-context7:8080
+      MCP_FETCH_URL: http://mcp-fetch:8080
     ports:
       - "8000:8000"
 

@@ -27,6 +27,7 @@ sys.path.append('/app')
 from src.common.messaging_simple import create_messaging_client, MessagingClient
 from src.common.config import Settings
 from src.common.file_handler import FileHandler, ProjectFiles, process_uploaded_zip, process_git_repo, process_file_dict
+from dataclasses import asdict
 
 # Logging setup
 logging.basicConfig(
@@ -180,8 +181,8 @@ class APIGateway:
             "status": "submitted",
             "created_at": time.time(),
             "updated_at": time.time(),
-            "original_request": request.dict(),
-            "project_files": project_files.dict() if project_files else None
+            "original_request": request.model_dump(),
+            "project_files": asdict(project_files) if project_files else None
         }
         
         # Publish to analysis topic

@@ -118,6 +118,7 @@ Pipfile.lock
 # Local development data
 data/
 volumes/
+generated_project/
 
 # Secrets and certificates
 *.pem

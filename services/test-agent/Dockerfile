@@ -8,6 +8,7 @@ WORKDIR /app
 
 # Copy source code first (for dependency resolution)
 COPY src ./src
+COPY schemas ./schemas
 
 # Copy service files
 COPY services/test-agent/requirements.txt .

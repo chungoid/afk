@@ -172,32 +172,41 @@ Each agent exposes standard endpoints:
 
 ### Monitoring and Observability
 
-#### Real-time Dashboard
-- **Orchestrator Dashboard**: `http://localhost:8002/dashboard`
-  - Live pipeline monitoring with WebSocket updates
-  - Cross-agent coordination view
-  - Real-time progress tracking
+The system provides comprehensive monitoring, tracing, and management dashboards. For detailed dashboard usage instructions, see [docs/dashboards.md](docs/dashboards.md).
 
-#### Metrics and Monitoring
-- **Prometheus**: `http://localhost:9090`
-  - Service metrics and performance data
-  - Custom alerts and monitoring rules
-- **Grafana**: `http://localhost:3001` (admin/admin)
-  - Pre-configured dashboards
-  - Service health visualization
-  - Performance analytics
+#### Available Dashboards
 
-#### Distributed Tracing
-- **Jaeger**: `http://localhost:16686`
-  - Request tracing across services
-  - Performance bottleneck identification
-  - Service dependency mapping
+| Dashboard | URL | Credentials | Purpose |
+|-----------|-----|-------------|---------|
+| **Main Pipeline Dashboard** | `http://localhost:8000/dashboard` | None | Primary interface for project submission and monitoring |
+| **API Documentation** | `http://localhost:8000/docs` | None | Interactive API documentation and testing |
+| **Grafana Monitoring** | `http://localhost:3001` | admin/admin | Service metrics visualization and alerting |
+| **Prometheus Metrics** | `http://localhost:9090` | None | Raw metrics collection and querying |
+| **Jaeger Tracing** | `http://localhost:16686` | None | Distributed request tracing and performance analysis |
+| **RabbitMQ Management** | `http://localhost:15672` | guest/guest | Message queue monitoring and management |
+| **Weaviate Console** | `http://localhost:8080` | None | Vector database management and querying |
+| **Git Server** | `http://localhost:3000` | None | Code repository hosting and version control |
 
-#### Message Queue Management
-- **RabbitMQ Management**: `http://localhost:15672` (admin/secure_password)
-  - Queue monitoring and management
-  - Message flow visualization
-  - Connection and channel monitoring
+#### MCP Server Endpoints
+- **Sequential Thinking**: `http://localhost:8101`
+- **Memory Management**: `http://localhost:8102`
+- **Filesystem Operations**: `http://localhost:8103`
+- **Git Integration**: `http://localhost:8104`
+- **Web Fetch**: `http://localhost:8105`
+- **Time Services**: `http://localhost:8106`
+- **Context Management**: `http://localhost:8107`
+
+#### Quick Health Check
+```bash
+# Verify all services are running
+curl http://localhost:8000/health
+
+# Check dashboard availability
+curl -s http://localhost:8000/dashboard | head -n 10
+
+# Verify monitoring stack
+curl -s http://localhost:9090/api/v1/query?query=up | jq '.data.result | length'
+```
 
 ## Development
 

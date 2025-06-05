@@ -82,7 +82,7 @@ class DummyMetric:
     def __enter__(self): return self
     def __exit__(self, *args): pass
 
-# Removed prometheus imports for now
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 # Import the existing messaging infrastructure
 import sys
@@ -109,11 +109,26 @@ logging.basicConfig(
 logger = logging.getLogger("planning-agent")
 
 # Prometheus metrics
-MESSAGES_RECEIVED = DummyMetric()
-MESSAGES_PUBLISHED = DummyMetric()
-PLANNING_DURATION = DummyMetric()
-ACTIVE_PLANS = DummyMetric()
-PLANNING_ERRORS = DummyMetric()
+MESSAGES_RECEIVED = Counter(
+    'planning_messages_received_total',
+    'Total number of messages received by planning agent'
+)
+MESSAGES_PUBLISHED = Counter(
+    'planning_messages_published_total',
+    'Total number of messages published by planning agent'
+)
+PLANNING_DURATION = Histogram(
+    'planning_duration_seconds',
+    'Time spent on planning requests'
+)
+ACTIVE_PLANS = Gauge(
+    'active_plans',
+    'Number of currently active plans'
+)
+PLANNING_ERRORS = Counter(
+    'planning_errors_total',
+    'Total number of planning errors'
+)
 
 # Configuration
 SUBSCRIBE_TOPIC = os.getenv("SUBSCRIBE_TOPIC", "tasks.planning")
@@ -443,8 +458,11 @@ async def readiness():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint"""
-    return {"status": "metrics disabled for now"}
-    return {"status": "metrics disabled for now"}
+    from fastapi import Response
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST
+    )
 
 @app.get("/status")
 async def status():

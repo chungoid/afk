@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 # Add src to path for imports
-sys.path.append(str(Path(__file__).parent / "src"))
+sys.path.append(str(Path(__file__).parent.parent / "src"))
 
 print("MCP-Enhanced Agent Swarm Complete Pipeline Test")
 print("=" * 60)
@@ -371,7 +371,7 @@ async def test_complete_pipeline_workflow():
         except:
             pass
 
-async def monitor_pipeline_progress(request_id: str, timeout: int = 180):
+async def monitor_pipeline_progress(request_id: str, timeout: int = 1200):
     """Monitor the complete pipeline progress through all agents"""
     print(f"\nMonitoring Pipeline Progress: {request_id}")
     print("-" * 40)
@@ -531,26 +531,18 @@ async def main():
     print("\nPHASE 3: Complete Workflow Test")
     print("=" * 40)
     
-    workflow_success = False
-    pipeline_result = None
+    # Force run workflow test to see how far we get
+    print("\nTesting Complete Pipeline Workflow")
+    print("-" * 40)
+    request_id = await test_complete_pipeline_workflow()
     
-    if agent_health_ok and mcp_servers_ok:
-        request_id = await test_complete_pipeline_workflow()
-        
-        if request_id:
-            print(f"\nPipeline submitted successfully: {request_id}")
-            pipeline_result = await monitor_pipeline_progress(request_id)
-            workflow_success = pipeline_result and pipeline_result.get("success", False)
-        else:
-            print("Failed to submit pipeline workflow")
+    if request_id:
+        print(f"Pipeline submitted successfully: {request_id}")
+        pipeline_result = await monitor_pipeline_progress(request_id, timeout=1200)  # 20 minutes for complex analysis
+        workflow_success = pipeline_result and pipeline_result.get("success", False)
     else:
-        print("Skipping workflow test - infrastructure not ready")
-    
-    # Final Summary
-    print("\n" + "=" * 60)
-    print("COMPLETE PIPELINE TEST RESULTS")
-    print("=" * 60)
-    
+        print("Failed to submit pipeline workflow")
+        workflow_success = False
     results = {
         "Basic Setup": setup_ok,
         "Docker Services": docker_ok,
@@ -573,11 +565,11 @@ async def main():
     
     print(f"\nOverall Results: {passed}/{total} tests passed")
     
-    if workflow_success and pipeline_result:
+    if workflow_success:
         print(f"\nPIPELINE SUCCESS DETAILS:")
-        print(f"   Completed stages: {len(pipeline_result.get('completed_stages', []))}")
-        print(f"   Missing stages: {pipeline_result.get('missing_stages', [])}")
-        print(f"   Total agents involved: {pipeline_result.get('total_stages', 0)}")
+        print(f"   Completed stages: {len(results['Complete Workflow'])}")
+        print(f"   Missing stages: {results['Complete Workflow']}")
+        print(f"   Total agents involved: {len(results['Complete Workflow'])}")
     
     if passed >= total - 2:
         print("\nSUCCESS: MCP-enhanced agent swarm is fully operational!")

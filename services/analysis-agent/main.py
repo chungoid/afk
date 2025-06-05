@@ -18,7 +18,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import uvicorn
-# Removed prometheus imports for now
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 # Import the existing messaging infrastructure and analysis code
 import sys
@@ -44,17 +44,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger("analysis-agent")
 
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-
-ANALYSIS_REQUESTS_TOTAL = DummyMetric()
-ANALYSIS_DURATION = DummyMetric()
-ANALYSIS_ERRORS = DummyMetric()
-ACTIVE_ANALYSES = DummyMetric()
+# Prometheus metrics
+ANALYSIS_REQUESTS_TOTAL = Counter(
+    'analysis_requests_total',
+    'Total number of analysis requests processed',
+    ['status']
+)
+ANALYSIS_DURATION = Histogram(
+    'analysis_duration_seconds',
+    'Time spent on analysis requests'
+)
+ANALYSIS_ERRORS = Counter(
+    'analysis_errors_total',
+    'Total number of analysis errors',
+    ['error_type']
+)
+ACTIVE_ANALYSES = Gauge(
+    'active_analyses',
+    'Number of currently active analyses'
+)
 
 # Configuration
 SUBSCRIBE_TOPIC = os.getenv("SUBSCRIBE_TOPIC", "tasks.analysis")
@@ -796,8 +804,12 @@ async def readiness():
 
 @app.get("/metrics")
 async def metrics():
-    """Metrics endpoint (simplified)"""
-    return {"status": "metrics disabled for now"}
+    """Prometheus metrics endpoint"""
+    from fastapi import Response
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST
+    )
 
 @app.get("/status")
 async def status():

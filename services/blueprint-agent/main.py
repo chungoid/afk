@@ -6,64 +6,10 @@ Publishes to: tasks.blueprint
 """
 
 import asyncio
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import os
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import json
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import logging
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 import time
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
 
 from typing import Dict, List, Any, Optional
 from contextlib import asynccontextmanager
@@ -71,32 +17,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import uvicorn
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
-# Removed prometheus imports for now
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 # Import the existing messaging infrastructure
 import sys
-
-# Simplified metrics (remove Prometheus for now to avoid collision)
-class DummyMetric:
-    def inc(self): pass
-    def dec(self): pass
-    def observe(self, value): pass
-    def labels(self, **kwargs): return self
-    def time(self): return self
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
-
 sys.path.append('/app')
 from src.common.messaging_simple import create_messaging_client, MessagingClient
 from src.common.config import Settings
@@ -109,11 +33,26 @@ logging.basicConfig(
 logger = logging.getLogger("blueprint-agent")
 
 # Prometheus metrics
-MESSAGES_RECEIVED = DummyMetric()
-MESSAGES_PUBLISHED = DummyMetric()
-BLUEPRINT_DURATION = DummyMetric()
-ACTIVE_BLUEPRINTS = DummyMetric()
-BLUEPRINT_ERRORS = DummyMetric()
+MESSAGES_RECEIVED = Counter(
+    'blueprint_messages_received_total',
+    'Total number of messages received by blueprint agent'
+)
+MESSAGES_PUBLISHED = Counter(
+    'blueprint_messages_published_total',
+    'Total number of messages published by blueprint agent'
+)
+BLUEPRINT_DURATION = Histogram(
+    'blueprint_duration_seconds',
+    'Time spent on blueprint generation'
+)
+ACTIVE_BLUEPRINTS = Gauge(
+    'active_blueprints',
+    'Number of currently active blueprint generations'
+)
+BLUEPRINT_ERRORS = Counter(
+    'blueprint_errors_total',
+    'Total number of blueprint generation errors'
+)
 
 # Configuration
 SUBSCRIBE_TOPIC = os.getenv("SUBSCRIBE_TOPIC", "tasks.planning")
@@ -883,8 +822,11 @@ async def readiness():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint"""
-    return {"status": "metrics disabled for now"}
-    return {"status": "metrics disabled for now"}
+    from fastapi import Response
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST
+    )
 
 @app.get("/status")
 async def status():
@@ -897,10 +839,10 @@ async def status():
             "publish": PUBLISH_TOPIC
         },
         "metrics": {
-            "messages_received": MESSAGES_RECEIVED._value.get(),
-            "messages_published": MESSAGES_PUBLISHED._value.get(),
-            "active_blueprints": ACTIVE_BLUEPRINTS._value.get(),
-            "errors": BLUEPRINT_ERRORS._value.get()
+            "messages_received": "Available via /metrics endpoint",
+            "messages_published": "Available via /metrics endpoint", 
+            "active_blueprints": "Available via /metrics endpoint",
+            "errors": "Available via /metrics endpoint"
         }
     }
 

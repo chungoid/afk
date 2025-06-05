@@ -6,8 +6,9 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 # Set working directory
 WORKDIR /app
 
-# Copy source code first (for dependency resolution)
+# Copy source code first (for dependency resolution)  
 COPY src ./src
+COPY schemas ./schemas
 
 # Copy service files
 COPY services/analysis-agent/requirements.txt .
