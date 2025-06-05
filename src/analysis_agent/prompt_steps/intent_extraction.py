@@ -42,7 +42,10 @@ def run(input: Dict[str, Any], templates_dir: Path) -> Dict[str, Any]:
         raise IntentExtractionError(msg) from e
 
     try:
-        response = openai.ChatCompletion.create(
+        # Use OpenAI v1.x compatible API
+        from openai import OpenAI
+        client = OpenAI()
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
