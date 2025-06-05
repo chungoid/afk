@@ -34,6 +34,9 @@ from src.common.file_handler import ProjectFiles
 # Add project paths for imports
 sys.path.append('/home/flip/Desktop/test_swarm')
 
+# Import MCP-enhanced orchestrator
+from src.analysis_agent.orchestrator import Orchestrator
+
 # Logging setup
 logging.basicConfig(
     level=logging.INFO,
@@ -109,6 +112,9 @@ class AnalysisAgent:
         # Initialize analysis components
         self.analysis_steps = AnalysisSteps()
         self.task_analyzer = TaskAnalyzer()
+        
+        # Initialize MCP-enhanced orchestrator
+        self.orchestrator = Orchestrator(enable_mcp=True)
         
         # Track active analyses
         self.active_analyses: Dict[str, AnalysisRequest] = {}

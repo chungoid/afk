@@ -100,6 +100,7 @@ class DummyMetric:
 sys.path.append('/app')
 from src.common.messaging_simple import create_messaging_client, MessagingClient
 from src.common.config import Settings
+from src.common.mcp_client import MCPClient, modify_file
 
 # Logging setup
 logging.basicConfig(
@@ -222,10 +223,19 @@ class CodeAgent:
             ACTIVE_CODE_TASKS.dec()
             
     async def generate_code(self, blueprint: BlueprintInput) -> CodeOutput:
-        """Generate code from the blueprint"""
+        """Generate code from the blueprint - handles both new and existing projects"""
         
         # Generate unique code ID
         code_id = f"code_{int(time.time())}_{blueprint.blueprint_id}"
+        
+        # Check if this is an existing project requiring modifications
+        if blueprint.project_type in ["existing_git", "existing_local"] and blueprint.existing_codebase:
+            return await self.modify_existing_project(blueprint, code_id)
+        else:
+            return await self.generate_new_project(blueprint, code_id)
+    
+    async def generate_new_project(self, blueprint: BlueprintInput, code_id: str) -> CodeOutput:
+        """Generate code for a new project (original functionality)"""
         
         # Generate code artifacts
         artifacts = []
@@ -277,9 +287,208 @@ class CodeAgent:
                 "agent": "code-agent",
                 "version": "1.0",
                 "total_files": len(artifacts),
-                "total_lines": sum(len(artifact.content.split('\n')) for artifact in artifacts)
+                "total_lines": sum(len(artifact.content.split('\n')) for artifact in artifacts),
+                "project_type": "new"
             }
         )
+    
+    async def modify_existing_project(self, blueprint: BlueprintInput, code_id: str) -> CodeOutput:
+        """Modify existing project using MCP filesystem tools"""
+        logger.info(f"Modifying existing project: {blueprint.project_type}")
+        
+        artifacts = []
+        modified_files = []
+        new_files = []
+        
+        try:
+            async with MCPClient() as mcp_client:
+                # Get existing codebase information
+                existing_files = blueprint.existing_codebase.get("files", {})
+                modification_plan = blueprint.modification_plan or {}
+                
+                # Process file modifications from the modification plan
+                for modification in modification_plan.get("file_modifications", []):
+                    file_path = modification.get("file_path")
+                    action = modification.get("action")  # "modify", "create", "delete"
+                    content = modification.get("content")
+                    
+                    if action == "modify" and file_path in existing_files:
+                        # Modify existing file using MCP
+                        logger.info(f"Modifying existing file: {file_path}")
+                        result = await modify_file(file_path, content, create_backup=True)
+                        
+                        artifacts.append(CodeArtifact(
+                            file_path=file_path,
+                            content=content,
+                            language=self.detect_language(file_path),
+                            module=modification.get("module", "existing"),
+                            dependencies=modification.get("dependencies", [])
+                        ))
+                        modified_files.append(file_path)
+                        
+                    elif action == "create":
+                        # Create new file using MCP
+                        logger.info(f"Creating new file: {file_path}")
+                        await mcp_client.call_tool('filesystem', 'write_file', {
+                            'path': file_path,
+                            'content': content
+                        })
+                        
+                        artifacts.append(CodeArtifact(
+                            file_path=file_path,
+                            content=content,
+                            language=self.detect_language(file_path),
+                            module=modification.get("module", "new"),
+                            dependencies=modification.get("dependencies", [])
+                        ))
+                        new_files.append(file_path)
+                        
+                    elif action == "delete":
+                        # Delete file using MCP (with backup)
+                        logger.info(f"Deleting file: {file_path}")
+                        try:
+                            # Create backup first
+                            await mcp_client.call_tool('filesystem', 'copy_file', {
+                                'source': file_path,
+                                'destination': f"{file_path}.deleted_backup"
+                            })
+                            await mcp_client.call_tool('filesystem', 'delete_file', {
+                                'path': file_path
+                            })
+                        except Exception as e:
+                            logger.warning(f"Could not delete {file_path}: {e}")
+                
+                # Generate any additional files needed (tests, config, etc.)
+                additional_artifacts = await self.generate_additional_files_for_existing_project(blueprint)
+                artifacts.extend(additional_artifacts)
+                
+                # Basic static analysis on modified files
+                static_analysis_results = {
+                    "modified_files": len(modified_files),
+                    "new_files": len(new_files),
+                    "total_changes": len(artifacts),
+                    "analysis_timestamp": time.time()
+                }
+                
+                return CodeOutput(
+                    code_id=code_id,
+                    blueprint_id=blueprint.blueprint_id,
+                    artifacts=artifacts,
+                    generated_modules=list(set(artifact.module for artifact in artifacts)),
+                    test_files=[],  # Could generate tests for modified functionality
+                    static_analysis_results=static_analysis_results,
+                    build_instructions={"type": "existing_project_modification", "modified_files": modified_files},
+                    deployment_files=[],
+                    metadata={
+                        **blueprint.metadata,
+                        "created_at": time.time(),
+                        "agent": "code-agent",
+                        "version": "1.0",
+                        "project_type": blueprint.project_type,
+                        "total_files": len(artifacts),
+                        "modified_files": modified_files,
+                        "new_files": new_files,
+                        "total_lines": sum(len(artifact.content.split('\n')) for artifact in artifacts)
+                    }
+                )
+                
+        except Exception as e:
+            logger.error(f"Error modifying existing project: {e}")
+            # Fallback: treat as new project
+            logger.info("Falling back to new project generation")
+            return await self.generate_new_project(blueprint, code_id)
+    
+    def detect_language(self, file_path: str) -> str:
+        """Detect programming language from file extension"""
+        extension = file_path.split('.')[-1].lower()
+        language_map = {
+            'py': 'python',
+            'js': 'javascript', 
+            'jsx': 'javascript',
+            'ts': 'typescript',
+            'tsx': 'typescript',
+            'java': 'java',
+            'go': 'go',
+            'rs': 'rust',
+            'php': 'php',
+            'cs': 'csharp',
+            'cpp': 'cpp',
+            'c': 'c',
+            'html': 'html',
+            'css': 'css',
+            'sql': 'sql',
+            'yaml': 'yaml',
+            'yml': 'yaml',
+            'json': 'json',
+            'md': 'markdown'
+        }
+        return language_map.get(extension, 'text')
+    
+    async def generate_additional_files_for_existing_project(self, blueprint: BlueprintInput) -> List[CodeArtifact]:
+        """Generate additional files that might be needed for existing project modifications"""
+        artifacts = []
+        
+        # Example: Generate migration files if database changes are needed
+        if blueprint.modification_plan and blueprint.modification_plan.get("requires_database_migration"):
+            migration_content = self.generate_database_migration(blueprint)
+            artifacts.append(CodeArtifact(
+                file_path=f"migrations/{int(time.time())}_add_new_features.sql",
+                content=migration_content,
+                language="sql",
+                module="migration",
+                dependencies=[]
+            ))
+        
+        # Example: Generate new configuration files if needed
+        if blueprint.modification_plan and blueprint.modification_plan.get("requires_config_update"):
+            config_content = self.generate_config_update(blueprint)
+            artifacts.append(CodeArtifact(
+                file_path="config/new_features.yaml",
+                content=config_content,
+                language="yaml",
+                module="config",
+                dependencies=[]
+            ))
+        
+        return artifacts
+    
+    def generate_database_migration(self, blueprint: BlueprintInput) -> str:
+        """Generate SQL migration for existing project"""
+        return f"""-- Migration for {blueprint.metadata.get('project_name', 'existing_project')}
+-- Generated by Code Agent at {time.time()}
+
+-- Add new tables or modify existing ones based on requirements
+-- This is a placeholder - would be generated based on specific requirements
+
+BEGIN;
+
+-- Example: Add new user authentication tables if needed
+-- CREATE TABLE IF NOT EXISTS user_sessions (
+--     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--     user_id UUID NOT NULL,
+--     token VARCHAR(255) NOT NULL,
+--     expires_at TIMESTAMP NOT NULL,
+--     created_at TIMESTAMP DEFAULT NOW()
+-- );
+
+COMMIT;
+"""
+    
+    def generate_config_update(self, blueprint: BlueprintInput) -> str:
+        """Generate configuration update for existing project"""
+        return f"""# Configuration update for {blueprint.metadata.get('project_name', 'existing_project')}
+# Generated by Code Agent
+
+# New feature configurations
+new_features:
+  enabled: true
+  created_at: {time.time()}
+  
+# Example configurations based on modification plan
+# database:
+#   enable_auth: true
+#   session_timeout: 3600
+"""
         
     def generate_backend_code(self, blueprint: BlueprintInput, framework: str) -> List[CodeArtifact]:
         """Generate backend code artifacts"""
